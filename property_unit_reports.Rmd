@@ -1,0 +1,2328 @@
+---
+output: 
+  html_document:
+    self_contained: true
+    mode: selfcontained
+    toc: true
+    toc_float: true
+    collapsed: false
+    smooth_scroll: false
+    orientation: rows
+    fig_width: 7
+    fig_height: 4.5
+    theme: cosmo
+    highlight: tango
+    code_folding: hide
+    flexdashboard::flex_dashboard: null
+---
+
+# Property Transactions
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+library(DT)
+library(dplyr)
+library(lubridate)
+library(openxlsx)
+
+# Load and clean data
+df <- read.xlsx("~/7.Narration/8.Property unit reports/Input/property_transactions_1750066258149.xlsx")
+colnames(df) <- make.names(colnames(df))
+
+# Convert TRANSACTION.DATE to Date format
+df$TRANSACTION.DATE <- as.Date(df$TRANSACTION.DATE)
+
+# Helper function to format numbers
+format_number <- function(x) {
+  format(round(x, 2), big.mark = ",", scientific = FALSE)
+}
+
+# Helper function to format currency
+format_currency <- function(x) {
+  paste0("SAR ", format_number(x))
+}
+
+# 1.1 **Highest Transaction in a Neighbourhood**
+# highest_trans <- df %>%
+#   arrange(desc(VALUE..SAR.)) %>%
+#   slice(1)
+# highest_neighbourhood <- highest_trans$NEIGHBORHOOD
+# highest_date <- format(highest_trans$TRANSACTION.DATE, "%B %d, %Y")
+# highest_value <- format_currency(highest_trans$VALUE..SAR.)
+# highest_area <- format_number(highest_trans$TRANSACTION.AREA..sqm.)
+# highest_rate <- format_currency(highest_trans$PROPERTY.TRANSACTION.RATE..SAR.sqm.)
+# top_zones <- df %>%
+#   filter(NEIGHBORHOOD != highest_neighbourhood) %>%
+#   group_by(NEIGHBORHOOD) %>%
+#   summarise(total_value = sum(VALUE..SAR., na.rm = TRUE)) %>%
+#   arrange(desc(total_value)) %>%
+#   slice_head(n = 2) %>%
+#   pull(NEIGHBORHOOD) %>%
+#   paste(collapse = " and ")
+
+neigh_summary <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(total_value = sum(VALUE..SAR., na.rm = TRUE)) %>%
+  arrange(desc(total_value))
+
+# Step 2: Get the top neighborhood
+highest_neighbourhood <- neigh_summary$NEIGHBORHOOD[1]
+
+# Step 3: Filter transactions for this neighborhood and get the highest individual transaction
+highest_trans <- df %>%
+  filter(NEIGHBORHOOD == highest_neighbourhood) %>%
+  arrange(desc(VALUE..SAR.)) %>%
+  slice(1)
+
+# Step 4: Extract formatted fields
+highest_date <- format(highest_trans$TRANSACTION.DATE, "%B %d, %Y")
+highest_value <- format_currency(df %>%
+  filter(NEIGHBORHOOD == highest_neighbourhood) %>%
+  summarise(sum(VALUE..SAR.)))
+highest_area <- format_number(highest_trans$TRANSACTION.AREA..sqm.)
+highest_rate <- format_currency(highest_trans$PROPERTY.TRANSACTION.RATE..SAR.sqm.)
+
+# Step 5: Get the next top 2 neighborhoods (excluding the highest one)
+top_zones <- neigh_summary %>%
+  filter(NEIGHBORHOOD != highest_neighbourhood) %>%
+  slice_head(n = 2) %>%
+  pull(NEIGHBORHOOD) %>%
+  paste(collapse = " and ")
+
+
+# 1.2 **Most Active Areas by Transactions by Neighbourhood**
+most_active_neighbourhood <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(n_trans = n()) %>%
+  arrange(desc(n_trans)) %>%
+  slice(1)
+most_active_name <- most_active_neighbourhood$NEIGHBORHOOD
+most_active_count <- format_number(most_active_neighbourhood$n_trans)
+
+# 1.3 **Most Active Areas by Transactions by Zoning**
+zone_summary <- df %>%
+  group_by(ZONE) %>%
+  summarise(n_trans = n(), total_value = sum(VALUE..SAR., na.rm = TRUE)) %>%
+  arrange(desc(n_trans))
+most_active_zone <- zone_summary$ZONE[1]
+most_active_zone_count <- format_number(zone_summary$n_trans[1])
+highest_value_zone <- zone_summary %>%
+  arrange(desc(total_value)) %>%
+  slice(1)
+highest_value_zone_name <- highest_value_zone$ZONE
+highest_value_zone_count <- format_number(highest_value_zone$n_trans)
+highest_value_zone_total <- format_currency(highest_value_zone$total_value)
+
+# 1.4 Neighbourhoods with the Highest Property Rates
+# top_rates <- df %>%
+#   group_by(NEIGHBORHOOD) %>%
+#   summarise(
+#     avg_rate = mean(PROPERTY.TRANSACTION.RATE..SAR.sqm., na.rm = TRUE),
+#     n_trans = n()
+#   ) %>%
+#   arrange(desc(avg_rate)) %>%
+#   filter(n_trans>1) %>% 
+#   slice_head(n = 3)
+# top_rate_1 <- top_rates$NEIGHBORHOOD[1]
+# top_rate_1_value <- format_currency(top_rates$avg_rate[1])
+# top_rate_1_count <- top_rates$n_trans[1]
+# top_rate_2 <- top_rates$NEIGHBORHOOD[2]
+# top_rate_2_value <- format_currency(top_rates$avg_rate[2])
+# top_rate_2_count <- top_rates$n_trans[2]
+# top_rate_3 <- top_rates$NEIGHBORHOOD[3]
+# top_rate_3_value <- format_currency(top_rates$avg_rate[3])
+# top_rate_3_count <- top_rates$n_trans[3]
+
+#------------------------------------
+top_rates <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(
+    avg_rate = mean(`PROPERTY.TRANSACTION.RATE..SAR.sqm.`, na.rm = TRUE),
+    n_trans = n()
+  ) %>%
+  arrange(desc(avg_rate)) %>%
+  #filter(n_trans > 5) %>%  # Optional: keep neighborhoods with >1 transaction
+  slice_head(n = 3)
+
+# Step 2: Extract values using same variable names
+top_rate_1 <- top_rates$NEIGHBORHOOD[1]
+top_rate_1_value <- format_currency(top_rates$avg_rate[1])
+top_rate_1_count <- top_rates$n_trans[1]
+
+top_rate_2 <- top_rates$NEIGHBORHOOD[2]
+top_rate_2_value <- format_currency(top_rates$avg_rate[2])
+top_rate_2_count <- top_rates$n_trans[2]
+
+top_rate_3 <- top_rates$NEIGHBORHOOD[3]
+top_rate_3_value <- format_currency(top_rates$avg_rate[3])
+top_rate_3_count <- top_rates$n_trans[3]
+#---------------------------------
+
+# # Step 1: Compute average rate per neighborhood and sort
+# rate_by_neigh <- df %>%
+#   group_by(NEIGHBORHOOD) %>%
+#   summarise(avg_rate = mean(`PROPERTY.TRANSACTION.RATE..SAR.sqm.`, na.rm = TRUE)) %>%
+#   arrange(desc(avg_rate))
+# 
+# # Step 2: Get top 3 neighborhoods by average rate
+# top_neighs <- rate_by_neigh %>%
+#   slice_head(n = 3) %>%
+#   pull(NEIGHBORHOOD)
+# 
+# # Step 3: Summarise required details (rate, value, count, zone) for top neighborhoods only
+# get_mode <- function(x) {
+#   ux <- na.omit(x)
+#   if (length(ux) == 0) return(NA)
+#   ux[which.max(tabulate(match(ux, ux)))]
+# }
+# 
+# top_rates <- df %>%
+#   filter(NEIGHBORHOOD %in% top_neighs) %>%
+#   group_by(NEIGHBORHOOD) %>%
+#   summarise(
+#     avg_rate = mean(`PROPERTY.TRANSACTION.RATE..SAR.sqm.`, na.rm = TRUE),
+#     avg_value = mean(`VALUE..SAR.`, na.rm = TRUE),
+#     n_trans = n(),
+#     zone = get_mode(ZONE)
+#   ) %>%
+#   arrange(desc(avg_rate))
+# 
+# # Step 4: Assign to original variable names
+# top_rate_1 <- top_rates$NEIGHBORHOOD[1]
+# top_rate_1_value <- format_currency(top_rates$avg_rate[1])
+# top_rate_1_count <- top_rates$n_trans[1]
+# top_rate_1_zone <- top_rates$zone[1]
+# 
+# top_rate_2 <- top_rates$NEIGHBORHOOD[2]
+# top_rate_2_value <- format_currency(top_rates$avg_rate[2])
+# top_rate_2_count <- top_rates$n_trans[2]
+# top_rate_2_zone <- top_rates$zone[2]
+# 
+# top_rate_3 <- top_rates$NEIGHBORHOOD[3]
+# top_rate_3_value <- format_currency(top_rates$avg_rate[3])
+# top_rate_3_count <- top_rates$n_trans[3]
+# top_rate_3_zone <- top_rates$zone[3]
+
+
+# 1.5 **High Demand, Low Supply Neighbourhoods**
+# high_demand <- df %>%
+#   group_by(NEIGHBORHOOD) %>%
+#   summarise(
+#     avg_rate = mean(PROPERTY.TRANSACTION.RATE..SAR.sqm., na.rm = TRUE),
+#     n_trans = n()
+#   ) %>%
+#   filter(n_trans <= 6) %>%
+#   arrange(desc(avg_rate)) %>%
+#   slice_head(n = 3)
+# high_demand_1 <- high_demand$NEIGHBORHOOD[1]
+# high_demand_1_rate <- format_currency(high_demand$avg_rate[1])
+# high_demand_1_count <- high_demand$n_trans[1]
+# high_demand_2 <- high_demand$NEIGHBORHOOD[2]
+# high_demand_2_rate <- format_currency(high_demand$avg_rate[2])
+# high_demand_2_count <- high_demand$n_trans[2]
+# high_demand_3 <- high_demand$NEIGHBORHOOD[3]
+# high_demand_3_rate <- format_currency(high_demand$avg_rate[3])
+# high_demand_3_count <- high_demand$n_trans[3]
+
+# 1.5 **High Demand, Low Supply Neighbourhoods**
+
+# 1.5 **High Demand, Low Supply Neighbourhoods**
+
+# Step 1: Aggregate average rate and transaction count by neighborhood
+high_demand_raw <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(
+    avg_rate = mean(`PROPERTY.TRANSACTION.RATE..SAR.sqm.`, na.rm = TRUE),
+    n_trans = n()
+  ) %>%
+  ungroup()
+
+# Step 2: Add percentile ranks (normalized)
+high_demand_ranked <- high_demand_raw %>%
+  mutate(
+    rate_rank = percent_rank(avg_rate),
+    count_rank = percent_rank(n_trans)
+  )
+
+# Step 3: Filter high-rate + low-count neighborhoods
+high_demand <- high_demand_ranked %>%
+  filter(rate_rank > 0.80, count_rank < 0.40) %>%
+  arrange(desc(avg_rate)) %>%
+  slice_head(n = 3)
+
+# Step 4: Assign output variables
+high_demand_1 <- high_demand$NEIGHBORHOOD[1]
+high_demand_1_rate <- format_currency(high_demand$avg_rate[1])
+high_demand_1_count <- high_demand$n_trans[1]
+
+high_demand_2 <- high_demand$NEIGHBORHOOD[2]
+high_demand_2_rate <- format_currency(high_demand$avg_rate[2])
+high_demand_2_count <- high_demand$n_trans[2]
+
+high_demand_3 <- high_demand$NEIGHBORHOOD[3]
+high_demand_3_rate <- format_currency(high_demand$avg_rate[3])
+high_demand_3_count <- high_demand$n_trans[3]
+
+
+# 1.6 **Development Density Ratio (DDR) by Zone**
+# ddr_summary <- df %>%
+#   filter(!is.na(TRANSACTION.AREA..sqm.), !is.na(BUILT.UP.AREA..sqm.)) %>%
+#   group_by(ZONE) %>%
+#   summarise(
+#     avg_ddr = mean(BUILT.UP.AREA..sqm. / TRANSACTION.AREA..sqm., na.rm = TRUE)
+#   ) %>%
+#   arrange(desc(avg_ddr))
+# ddr_1 <- ddr_summary$ZONE[1]
+# ddr_1_value <- round(ddr_summary$avg_ddr[1] * 100)
+# ddr_2 <- ddr_summary$ZONE[2]
+# ddr_2_value <- round(ddr_summary$avg_ddr[2] * 100)
+# ddr_3 <- ddr_summary$ZONE[3]
+# ddr_3_value <- round(ddr_summary$avg_ddr[3] * 100)
+# ddr_4 <- ddr_summary$ZONE[4]
+# ddr_4_value <- round(ddr_summary$avg_ddr[4] * 100)
+
+# 1.6 **Development Density Ratio (DDR) by Zone**
+
+# Step 1 & 2: Filter and compute DDR
+density_df <- df %>%
+  filter(
+    !is.na(`TRANSACTION.AREA..sqm.`),
+    !is.na(`BUILT.UP.AREA..sqm.`),
+    !is.na(ZONE)
+  ) %>%
+  mutate(
+    DDR = `BUILT.UP.AREA..sqm.` / `TRANSACTION.AREA..sqm.`
+  ) %>%
+  filter(DDR > 0, DDR <= 2)
+
+# Step 3: Average DDR per zone
+ddr_summary <- density_df %>%
+  group_by(ZONE) %>%
+  summarise(avg_ddr = mean(DDR, na.rm = TRUE)) %>%
+  arrange(desc(avg_ddr))
+
+# Step 4: Output variables (rounded to percent)
+ddr_1 <- ddr_summary$ZONE[1]
+ddr_1_value <- round(ddr_summary$avg_ddr[1] * 100)
+
+ddr_2 <- ddr_summary$ZONE[2]
+ddr_2_value <- round(ddr_summary$avg_ddr[2] * 100)
+
+ddr_3 <- ddr_summary$ZONE[3]
+ddr_3_value <- round(ddr_summary$avg_ddr[3] * 100)
+
+ddr_4 <- ddr_summary$ZONE[4]
+ddr_4_value <- round(ddr_summary$avg_ddr[4] * 100)
+
+
+# 1.7 Price Band Analysis
+# price_bands <- df %>%
+#   mutate(
+#     price_band = case_when(
+#       VALUE..SAR. <= 500000 ~ "Under SAR 500K",
+#       VALUE..SAR. <= 1000000 ~ "SAR 500K-1M",
+#       VALUE..SAR. <= 2000000 ~ "SAR 1M-2M",
+#       TRUE ~ "SAR >2M"
+#     )
+#   ) %>%
+#   group_by(price_band) %>%
+#   summarise(n_trans = n()) %>%
+#   mutate(
+#     percentage = n_trans / sum(n_trans) * 100,
+#     price_band = factor(price_band, levels = c("Under SAR 500K", "SAR 500K-1M", "SAR 1M-2M", "SAR >2M"))
+#   ) %>%
+#   arrange(price_band)
+# band_1_count <- format_number(price_bands$n_trans[1])
+# band_1_pct <- round(price_bands$percentage[1])
+# band_2_count <- format_number(price_bands$n_trans[2])
+# band_2_pct <- round(price_bands$percentage[2])
+# band_3_count <- format_number(price_bands$n_trans[3])
+# band_3_pct <- round(price_bands$percentage[3])
+# band_4_count <- format_number(price_bands$n_trans[4])
+# band_4_pct <- round(price_bands$percentage[4])
+
+#-------
+# Calculate quantiles for price bands (0%, 25%, 50%, 75%, 100%)
+# Calculate quantiles for price bands
+price_quantiles <- quantile(df$VALUE..SAR., probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+
+# Round quantiles to intuitive boundaries
+rounded_quantiles <- c(
+  floor(price_quantiles[1] / 100000) * 100000,  # Minimum (likely 0 or close to it)
+  round(price_quantiles[2] / 100000) * 100000,  # Round 25th percentile to nearest 100,000
+  round(price_quantiles[3] / 100000) * 100000,  # Round 50th percentile to nearest 100,000
+  round(price_quantiles[4] / 100000) * 100000,  # Round 75th percentile to nearest 100,000
+  ceiling(price_quantiles[5] / 100000) * 100000 # Maximum (rounded up)
+)
+
+# Create labels for price bands
+band_labels <- c(
+  paste0("Under SAR ", format(rounded_quantiles[2], big.mark = ",", scientific = FALSE)),
+  paste0("SAR ", format(rounded_quantiles[2], big.mark = ",", scientific = FALSE), "-", 
+         format(rounded_quantiles[3], big.mark = ",", scientific = FALSE)),
+  paste0("SAR ", format(rounded_quantiles[3], big.mark = ",", scientific = FALSE), "-", 
+         format(rounded_quantiles[4], big.mark = ",", scientific = FALSE)),
+  paste0("Greater SAR ", format(rounded_quantiles[4], big.mark = ",", scientific = FALSE))
+)
+
+# Create price bands and summarize
+price_bands <- df %>%
+  mutate(
+    price_band = case_when(
+      VALUE..SAR. < rounded_quantiles[2] ~ band_labels[1],
+      VALUE..SAR. >= rounded_quantiles[2] & VALUE..SAR. < rounded_quantiles[3] ~ band_labels[2],
+      VALUE..SAR. >= rounded_quantiles[3] & VALUE..SAR. < rounded_quantiles[4] ~ band_labels[3],
+      VALUE..SAR. >= rounded_quantiles[4] ~ band_labels[4]
+    )
+  ) %>%
+  group_by(price_band) %>%
+  summarise(n_trans = n()) %>%
+  mutate(
+    percentage = n_trans / sum(n_trans) * 100,
+    percentage_rounded = round(percentage),  # Round to whole numbers
+    price_band = factor(price_band, levels = band_labels)
+  ) %>%
+  arrange(price_band)
+
+# Adjust percentages to sum to 100
+total_pct <- sum(price_bands$percentage_rounded)
+if (total_pct != 100) {
+  # Calculate the difference
+  diff <- 100 - total_pct
+  # Find the bucket with the smallest rounding error (closest to the next whole number)
+  rounding_errors <- price_bands$percentage - floor(price_bands$percentage)
+  max_error_idx <- which.max(rounding_errors)
+  price_bands$percentage_rounded[max_error_idx] <- price_bands$percentage_rounded[max_error_idx] + diff
+}
+
+# Extract counts and percentages
+band_1_count <- format_number(price_bands$n_trans[1])
+band_1_pct <- price_bands$percentage_rounded[1]
+band_2_count <- format_number(price_bands$n_trans[2])
+band_2_pct <- price_bands$percentage_rounded[2]
+band_3_count <- format_number(price_bands$n_trans[3])
+band_3_pct <- price_bands$percentage_rounded[3]
+band_4_count <- format_number(price_bands$n_trans[4])
+band_4_pct <- price_bands$percentage_rounded[4]
+
+
+# min_value <- min(df$VALUE..SAR., na.rm = TRUE) 
+# max_value <- max(df$VALUE..SAR., na.rm = TRUE) 
+# band_width <- (max_value - min_value) / 4 
+# price_breaks <- seq(min_value, max_value, by = band_width)
+# 
+# band_labels <- c( paste0("Under SAR ", format(round(price_breaks[2], 0), big.mark = ",", scientific = FALSE)), paste0("SAR ", format(round(price_breaks[2], 0), big.mark = ",", scientific = FALSE), "-", format(round(price_breaks[3], 0), big.mark = ",", scientific = FALSE)), paste0("SAR ", format(round(price_breaks[3], 0), big.mark = ",", scientific = FALSE), "-", format(round(price_breaks[4], 0), big.mark = ",", scientific = FALSE)), paste0("SAR >", format(round(price_breaks[4], 0), big.mark = ",", scientific = FALSE)) )
+# 
+# price_bands <- df %>% mutate( price_band = case_when( VALUE..SAR. <= price_breaks[2] ~ band_labels[1], VALUE..SAR. <= price_breaks[3] ~ band_labels[2], VALUE..SAR. <= price_breaks[4] ~ band_labels[3], TRUE ~ band_labels[4] ) ) %>% group_by(price_band) %>% summarise(n_trans = n()) %>% mutate( percentage = n_trans / sum(n_trans) * 100, price_band = factor(price_band, levels = band_labels) ) %>% arrange(price_band)
+# 
+# band_1_count <- format_number(price_bands$n_trans[1]) 
+# band_1_pct <- round(price_bands$percentage[1]) 
+# band_2_count <- format_number(price_bands$n_trans[2]) 
+# band_2_pct <- round(price_bands$percentage[2]) 
+# band_3_count <- format_number(price_bands$n_trans[3]) 
+# band_3_pct <- round(price_bands$percentage[3]) 
+# band_4_count <- format_number(price_bands$n_trans[4]) 
+# band_4_pct <- round(price_bands$percentage[4])
+
+# valid_values <- df$VALUE..SAR.[df$VALUE..SAR. > 0 & !is.na(df$VALUE..SAR.)]
+# log_quantiles <- quantile(log10(valid_values), probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+# price_breaks <- 10^log_quantiles  # Transform back to original scale
+# band_labels <- c(
+# paste0("Under SAR ", format(round(price_breaks[2], 0), big.mark = ",", scientific = FALSE)),
+# paste0("SAR ", format(round(price_breaks[2], 0), big.mark = ",", scientific = FALSE), "-", format(round(price_breaks[3], 0), big.mark = ",", scientific = FALSE)),
+# paste0("SAR ", format(round(price_breaks[3], 0), big.mark = ",", scientific = FALSE), "-", format(round(price_breaks[4], 0), big.mark = ",", scientific = FALSE)),
+# paste0("SAR >", format(round(price_breaks[4], 0), big.mark = ",", scientific = FALSE))
+# )
+# 
+# price_bands <- df %>%
+# mutate(
+# price_band = case_when(
+# is.na(VALUE..SAR.) | VALUE..SAR. <= 0 ~ NA_character_,
+# VALUE..SAR. <= price_breaks[2] ~ band_labels[1],
+# VALUE..SAR. <= price_breaks[3] ~ band_labels[2],
+# VALUE..SAR. <= price_breaks[4] ~ band_labels[3],
+# TRUE ~ band_labels[4]
+# )
+# ) %>%
+# group_by(price_band) %>%
+# summarise(n_trans = n(), .groups = "drop") %>%
+# mutate(
+# percentage = n_trans / sum(n_trans, na.rm = TRUE) * 100,
+# price_band = factor(price_band, levels = band_labels)
+# ) %>%
+# arrange(price_band)
+# 
+# price_bands <- price_bands[complete.cases(price_bands), ]
+# 
+# band_1_count <- format_number(price_bands$n_trans[1])
+# band_1_pct <- round(price_bands$percentage[1])
+# band_2_count <- format_number(price_bands$n_trans[2])
+# band_2_pct <- round(price_bands$percentage[2])
+# band_3_count <- format_number(price_bands$n_trans[3])
+# band_3_pct <- round(price_bands$percentage[3])
+# band_4_count <- format_number(price_bands$n_trans[4])
+# band_4_pct <- round(price_bands$percentage[4])
+
+                                                                 
+datatable(
+  df,
+  options = list(
+    pageLength = 10,         
+    scrollX = TRUE           
+  )
+)
+```
+
+## English Reports {.tabset}
+
+### REPORT-1
+
+#### 1.1. **Highest Transaction in a Neighbourhood**
+
+On **`r highest_date`**, **`r highest_neighbourhood`** recorded the highest investment activity, marked by a significant transaction valued at **`r highest_value`** for a **`r highest_area`** sqm property at a premium rate of **`r highest_rate`** per sqm—indicating strong investor confidence. **`r top_zones`** followed closely in terms of high-value investment zones.
+
+#### 1.2. **Most Active Areas by Transactions by Neighbourhood**
+
+**`r most_active_name`** emerged as the most active neighborhood, recording over **`r most_active_count`** transactions, which underscores its high liquidity and sustained investor interest.
+
+#### 1.3. **Most Active Areas by Transactions by Zoning**
+
+**`r most_active_zone`** lead in transaction volume with **`r most_active_zone_count`** deals, highlighting strong interest in land development and resale, while **`r highest_value_zone_name`**, though lower in count (**`r highest_value_zone_count`** transactions), dominate in value—exceeding **`r highest_value_zone_total`**, reflecting demand for larger or multi-unit assets.
+
+#### 1.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+**`r top_rate_1`** ranks highest nationally with an average property rate of **`r top_rate_1_value`**/sqm, based on **`r top_rate_1_count`** transactions in the Residential Building zone. **`r top_rate_2`** and **`r top_rate_3`** follow closely, averaging **`r top_rate_2_value`** and **`r top_rate_3_value`**/sqm, respectively, from **`r top_rate_2_count`** and **`r top_rate_3_count`** transactions.
+
+#### 1.5. **High Demand, Low Supply Neighbourhoods**
+
+**`r high_demand_1`** leads as a high-demand, low-supply neighbourhood, registering an impressive **`r high_demand_1_rate`**/sqm in **`r high_demand_1_count`** transaction. Following closely are **`r high_demand_2`** and **`r high_demand_3`**, which posted **`r high_demand_2_rate`**/sqm (**`r high_demand_2_count`** transactions) and **`r high_demand_3_rate`**/sqm (**`r high_demand_3_count`** transactions), respectively.
+
+#### 1.6. **Development Density Ratio (DDR) by Zone**
+
+**`r ddr_1`** zones recorded the highest average Development Density Ratio (DDR), with built-up areas occupying **`r ddr_1_value`**% of available land. **`r ddr_2`** followed with **`r ddr_2_value`**%, while **`r ddr_3`** showed a **`r ddr_3_value`**% utilization. **`r ddr_4`** zones had the lowest at just **`r ddr_4_value`**%.
+
+#### 1.7. **Price Band Analysis – Affordability Segmentation**
+
+An affordability-based analysis reveals that the largest share of transactions—over **`r band_1_pct`%**—falls within the **`r band_labels[1]`** segment, accounting for **`r band_1_count`** properties. Properties priced in the **`r band_labels[2]`** range represent **`r band_2_pct`%** of transactions (**`r band_2_count`** units), while those in the **`r band_labels[3]`** range form **`r band_3_pct`%** of the market (**`r band_3_count`** deals). Transactions in the **`r band_labels[4]`** segment contribute **`r band_4_pct`%** to the overall volume, totaling **`r band_4_count`** units.
+
+
+---
+
+### REPORT-2
+
+#### 2.1. **Highest Transaction in a Neighbourhood**
+
+Demonstrating exceptional investor interest, **`r highest_neighbourhood`** registered the highest transaction in the dataset on **`r highest_date`**—a **`r highest_value`** deal at **`r highest_rate`** per sqm for a **`r highest_area`** sqm property. **`r top_zones`** also featured prominently in the investment hierarchy.
+
+#### 2.2. **Most Active Areas by Transactions by Neighbourhood**
+
+With transaction volumes exceeding **`r most_active_count`**, **`r most_active_name`** stands out as the leading neighborhood for market activity, reflecting a vibrant and liquid real estate environment.
+
+#### 2.3. **Most Active Areas by Transactions by Zoning**
+
+The **`r most_active_zone`** category saw the highest number of transactions at **`r most_active_zone_count`**, indicating active demand for land investment. In contrast, **`r highest_value_zone_name`** accounted for **`r highest_value_zone_count`** deals but generated the highest total value, surpassing **`r highest_value_zone_total`**, showcasing larger-scale residential investments.
+
+#### 2.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+Topping the chart, **`r top_rate_1`** achieved the highest average rate of **`r top_rate_1_value`** per sqm from **`r top_rate_1_count`** residential building transactions. **`r top_rate_2`** and **`r top_rate_3`** trailed with solid averages of **`r top_rate_2_value`** and **`r top_rate_3_value`** per sqm, across **`r top_rate_2_count`** and **`r top_rate_3_count`** sales, respectively.
+
+#### 2.5. **High Demand, Low Supply Neighbourhoods**
+
+In the high-value, low-transaction segment, **`r high_demand_1`** tops the list with an average rate of **`r high_demand_1_rate`**/sqm from **`r high_demand_1_count`** transaction. **`r high_demand_2`** and **`r high_demand_3`** follow with respective averages of **`r high_demand_2_rate`**/sqm and **`r high_demand_3_rate`**/sqm across **`r high_demand_2_count`** and **`r high_demand_3_count`** transactions.
+
+#### 2.6. **Development Density Ratio (DDR) by Zone**
+
+Analysis of DDR by zone indicates that **`r ddr_1`** areas are the most intensively developed, with **`r ddr_1_value`**% land coverage. In contrast, **`r ddr_2`** and **`r ddr_3`** posted ratios of **`r ddr_2_value`**% and **`r ddr_3_value`**%, respectively, while **`r ddr_4`** showed minimal development at **`r ddr_4_value`**%.
+
+#### 2.7. **Price Band Analysis – Affordability Segmentation**
+
+A clear affordability skew is visible in the transaction distribution, with the **`r band_labels[1]`** segment dominating at **`r band_1_pct`**%, totalling **`r band_1_count`** units. The **`r band_labels[2]`** band follows closely with **`r band_2_count`** transactions (**`r band_2_pct`**%), while the **`r band_labels[3]`** range holds a **`r band_3_pct`**% share (**`r band_3_count`** units). Properties **`r band_labels[4]`** account for **`r band_4_pct`**%, or **`r band_4_count`** transactions.
+
+
+### REPORT-3
+
+#### 3.1. **Highest Transaction in a Neighbourhood**
+
+The top-ranking neighborhood in terms of total investment was **`r highest_neighbourhood`**, where a notable deal was closed on **`r highest_date`**, involving **`r highest_value`** at a rate of **`r highest_rate`** per sqm for **`r highest_area`** sqm. **`r top_zones`** also emerged as high-value contenders.
+
+#### 3.2. **Most Active Areas by Transactions by Neighbourhood**
+
+The neighborhood of **`r most_active_name`** reported the highest number of transactions—over **`r most_active_count`**—demonstrating consistent market engagement and strong asset turnover.
+
+#### 3.3. **Most Active Areas by Transactions by Zoning**
+
+With **`r most_active_zone_count`** transactions, **`r most_active_zone`** emerge as the most traded zoning category, pointing to their appeal for development or resale. Meanwhile, **`r highest_value_zone_name`** lead in total transaction value—**`r highest_value_zone_total`** across **`r highest_value_zone_count`** deals—signalling higher-value residential investments.
+
+#### 3.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+With **`r top_rate_1_count`** transactions, **`r top_rate_1`** posted the nation’s highest property rate at **`r top_rate_1_value`**/sqm in the residential building sector. **`r top_rate_2`** (**`r top_rate_2_count`** transactions) and **`r top_rate_3`** (**`r top_rate_3_count`** transactions) followed at **`r top_rate_2_value`** and **`r top_rate_3_value`**/sqm.
+
+#### 3.5. **High Demand, Low Supply Neighbourhoods**
+
+The neighborhood of **`r high_demand_1`** stands out as the highest-value, low-supply area, with a **`r high_demand_1_rate`**/sqm average from **`r high_demand_1_count`** recorded transaction. **`r high_demand_2`** (**`r high_demand_2_count`** transactions) and **`r high_demand_3`** (**`r high_demand_3_count`** transactions) follow at **`r high_demand_2_rate`** and **`r high_demand_3_rate`** per sqm.
+
+#### 3.6. **Development Density Ratio (DDR) by Zone**
+
+Built-up coverage is highest in **`r ddr_1`** zones, where **`r ddr_1_value`**% of land area is utilized. **`r ddr_2`** and **`r ddr_3`** follow with **`r ddr_2_value`**% and **`r ddr_3_value`**%, respectively. **`r ddr_4`** zones remain the least developed, at **`r ddr_4_value`**%.
+
+#### 3.7. **Price Band Analysis – Affordability Segmentation**
+
+The affordability segmentation highlights a concentration in the **`r band_labels[1]`** bracket, which constitutes more than **`r band_1_pct`**% of all transactions, or **`r band_1_count`** properties. The mid-range price band (**`r band_labels[2]`**) contributes **`r band_2_pct`**% with **`r band_2_count`** transactions, while **`r band_labels[3]`** properties comprise **`r band_3_pct`**% (**`r band_3_count`** sales) and **`r band_labels[4]`**  bracket makes up **`r band_4_pct`**% (**`r band_4_count`** properties).
+
+---
+
+### REPORT-4
+
+#### 4.1. **Highest Transaction in a Neighbourhood**
+
+**`r highest_neighbourhood`** stood out as the most invested neighbourhood, with a premier transaction executed on **`r highest_date`**—totalling **`r highest_value`** at a unit rate of **`r highest_rate`** for a **`r highest_area`** sqm asset. The neighbourhoods of **`r top_zones`** ranked next in terms of investment scale.
+
+#### 4.2. **Most Active Areas by Transactions by Neighbourhood**
+
+Posting more than **`r most_active_count`** transactions, **`r most_active_name`** leads all neighbourhoods in activity, signalling robust market movement and steady investor demand.
+
+#### 4.3. **Most Active Areas by Transactions by Zoning**
+
+The zoning data reveals that **`r most_active_zone`** are the most frequently transacted type (**`r most_active_zone_count`** transactions), suggesting sustained interest in raw land. However, **`r highest_value_zone_name`**, with **`r highest_value_zone_count`** transactions, command the highest investment value, exceeding **`r highest_value_zone_total`**.
+
+#### 4.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+The highest residential building rate was recorded in **`r top_rate_1`**, where **`r top_rate_1_count`** deals yielded an average of **`r top_rate_1_value`** per sqm. This was followed by **`r top_rate_2`** and **`r top_rate_3`**, averaging **`r top_rate_2_value`** and **`r top_rate_3_value`**/sqm, from **`r top_rate_2_count`** and **`r top_rate_3_count`** transactions.
+
+#### 4.5. **High Demand, Low Supply Neighbourhoods**
+
+**`r high_demand_1`** posted the top average rate among constrained-supply zones, with **`r high_demand_1_rate`**/sqm on **`r high_demand_1_count`** transaction. Meanwhile, **`r high_demand_2`** and **`r high_demand_3`** followed at **`r high_demand_2_rate`** and **`r high_demand_3_rate`**/sqm, with **`r high_demand_2_count`** and **`r high_demand_3_count`** transactions respectively.
+
+#### 4.6. **Development Density Ratio (DDR) by Zone**
+
+The DDR assessment shows **`r ddr_1`** zones with the densest development at **`r ddr_1_value`**%, significantly surpassing **`r ddr_2`** (**`r ddr_2_value`**%), **`r ddr_3`** (**`r ddr_3_value`**%), and **`r ddr_4`** areas, which posted the lowest at **`r ddr_4_value`**%.
+
+#### 4.7. **Price Band Analysis – Affordability Segmentation**
+
+Affordability remains a key driver, as evidenced by **`r band_1_count`** transactions (**`r band_1_pct`**%) occurring **`r band_labels[1]`** threshold. Properties between **`r band_labels[2]`** account for **`r band_2_count`** sales (**`r band_2_pct`**%), followed by **`r band_3_count`** transactions (**`r band_3_pct`**%) in the **`r band_labels[3]`** range. The **`r band_labels[4]`** tier saw **`r band_4_count`** transactions, forming **`r band_4_pct`**% of the total.
+
+---
+
+### REPORT-5
+
+#### 5.1. **Highest Transaction in a Neighbourhood**
+
+On **`r highest_date`**, **`r highest_neighbourhood`** posted the highest-value property deal across all neighbourhoods, involving a **`r highest_area`** sqm parcel priced at **`r highest_rate`**/sqm, summing to **`r highest_value`**. **`r top_zones`** followed as key zones of capital deployment.
+
+#### 5.2. **Most Active Areas by Transactions by Neighbourhood**
+
+Transaction data highlights **`r most_active_name`** as the most active area, with over **`r most_active_count`** deals, pointing to its role as a high-liquidity zone within the market.
+
+#### 5.3. **Most Active Areas by Transactions by Zoning**
+
+**`r most_active_zone`** rank highest in transaction volume (**`r most_active_zone_count`** deals), reflecting investor focus on development-ready land, while **`r highest_value_zone_name`**, despite fewer deals (**`r highest_value_zone_count`**), attracted over **`r highest_value_zone_total`**.
+
+#### 5.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+**`r top_rate_1`** leads the property market with an average of **`r top_rate_1_value`**/sqm over **`r top_rate_1_count`** residential building transactions. Next in line are **`r top_rate_2`** at **`r top_rate_2_value`**/sqm (**`r top_rate_2_count`** transactions) and **`r top_rate_3`** at **`r top_rate_3_value`**/sqm (**`r top_rate_3_count`** transactions).
+
+#### 5.5. **High Demand, Low Supply Neighbourhoods**
+
+As a high-demand zone with limited activity, **`r high_demand_1`** led with a transaction rate of **`r high_demand_1_rate`**/sqm on **`r high_demand_1_count`** deal. **`r high_demand_2`** and **`r high_demand_3`** also recorded strong averages of **`r high_demand_2_rate`**/sqm (**`r high_demand_2_count`** deals) and **`r high_demand_3_rate`**/sqm (**`r high_demand_3_count`** deals).
+
+#### 5.6. **Development Density Ratio (DDR) by Zone**
+
+Based on DDR metrics, **`r ddr_1`** areas exhibit the highest land use intensity with **`r ddr_1_value`**% coverage. This is followed by **`r ddr_2`** at **`r ddr_2_value`**%, **`r ddr_3`** at **`r ddr_3_value`**%, and **`r ddr_4`** zones, which stand at only **`r ddr_4_value`**% utilization.
+
+#### 5.7. **Price Band Analysis – Affordability Segmentation**
+
+The data reveals that affordable housing (**`r band_labels[1]`**) leads the market with **`r band_1_count`** transactions, constituting over **`r band_1_pct`**% of the total volume. The **`r band_labels[2]`** band follows with **`r band_2_pct`**% (**`r band_2_count`** units), **`r band_labels[3]`** makes up **`r band_3_pct`**% (**`r band_3_count`** properties), and **`r band_labels[4]`** accounts for **`r band_4_pct`**% (**`r band_4_count`** units).
+
+
+### REPORT-6
+
+#### 6.1. **Highest Transaction in a Neighbourhood**
+
+A landmark transaction occurred in **`r highest_neighbourhood`** on **`r highest_date`**, amounting to **`r highest_value`** at a high-end rate of **`r highest_rate`** per sqm for **`r highest_area`** sqm—underscoring premium demand. **`r top_zones`** were also among the top investment destinations.
+
+#### 6.2. **Most Active Areas by Transactions by Neighbourhood**
+
+Recording upwards of **`r most_active_count`** transactions, **`r most_active_name`** continues to show dynamic real estate activity, driven by strong liquidity and ongoing buyer interest.
+
+#### 6.3. **Most Active Areas by Transactions by Zoning**
+
+In terms of transaction count, **`r most_active_zone`** dominate with **`r most_active_zone_count`** deals, pointing to their market popularity. Yet, **`r highest_value_zone_name`** take the lead in value, generating over **`r highest_value_zone_total`** through **`r highest_value_zone_count`** transactions, highlighting large-scale residential interest.
+
+#### 6.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+At an impressive **`r top_rate_1_value`**/sqm, **`r top_rate_1`** ranks first in property rates based on **`r top_rate_1_count`** residential building transactions, followed by **`r top_rate_2`** and **`r top_rate_3`**, recording **`r top_rate_2_value`** and **`r top_rate_3_value`**/sqm over **`r top_rate_2_count`** and **`r top_rate_3_count`** transactions.
+
+#### 6.5. **High Demand, Low Supply Neighbourhoods**
+
+In neighbourhoods where supply is limited, **`r high_demand_1`** achieved the highest transaction rate at **`r high_demand_1_rate`**/sqm, supported by **`r high_demand_1_count`** transaction. **`r high_demand_2`** and **`r high_demand_3`** followed at **`r high_demand_2_rate`** and **`r high_demand_3_rate`**/sqm, based on **`r high_demand_2_count`** and **`r high_demand_3_count`** transactions respectively.
+
+#### 6.6. **Development Density Ratio (DDR) by Zone**
+
+The DDR assessment shows **`r ddr_1`** zones lead in development density, utilizing **`r ddr_1_value`**% of land for built-up structures. **`r ddr_2`** trail behind at **`r ddr_2_value`**%, with **`r ddr_3`** at **`r ddr_3_value`**%, and **`r ddr_4`** demonstrating sparse use at just **`r ddr_4_value`**%.
+
+#### 6.7. **Price Band Analysis – Affordability Segmentation**
+
+The transaction landscape shows a strong tilt toward affordability, with **`r band_1_count`** properties (**`r band_1_pct`**%) priced **`r band_labels[1]`**. The **`r band_labels[2]`** category follows at **`r band_2_pct`**% (**`r band_2_count`** units), while higher-end transactions in the **`r band_labels[3]`** and **`r band_labels[4]`** bands make up **`r band_3_pct`**% and **`r band_4_pct`**%, respectively.
+
+---
+
+### REPORT-7
+
+#### 7.1. **Highest Transaction in a Neighbourhood**
+
+With a remarkable transaction valued at **`r highest_value`** on **`r highest_date`**—based on **`r highest_area`** sqm at **`r highest_rate`**/sqm—**`r highest_neighbourhood`** led all neighbourhoods in total investment. The next most significant areas were **`r top_zones`**.
+
+#### 7.2. **Most Active Areas by Transactions by Neighbourhood**
+
+The real estate landscape in **`r most_active_name`** is marked by more than **`r most_active_count`** transactions, establishing it as the most active neighbourhood and a hub of market fluidity.
+
+#### 7.3. **Most Active Areas by Transactions by Zoning**
+
+**`r most_active_zone`** continue to attract the highest volume of deals (**`r most_active_zone_count`** transactions), likely driven by land development opportunities. On the other hand, **`r highest_value_zone_name`**, with **`r highest_value_zone_count`** transactions, top the charts in total transaction value—**`r highest_value_zone_total`**.
+
+#### 7.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+**`r top_rate_1`** leads residential building zones with the highest average rate of **`r top_rate_1_value`**/sqm from **`r top_rate_1_count`** sales, trailed by **`r top_rate_2`** (**`r top_rate_2_value`**/sqm, **`r top_rate_2_count`** sales) and **`r top_rate_3`** (**`r top_rate_3_value`**/sqm, **`r top_rate_3_count`** sales).
+
+#### 7.5. **High Demand, Low Supply Neighbourhoods**
+
+A key outlier for high-value in low-supply markets, **`r high_demand_1`** saw a **`r high_demand_1_rate`**/sqm rate with **`r high_demand_1_count`** transaction. **`r high_demand_2`** and **`r high_demand_3`** registered **`r high_demand_2_rate`**/sqm (**`r high_demand_2_count`** deals) and **`r high_demand_3_rate`**/sqm (**`r high_demand_3_count`** deals).
+
+#### 7.6. **Development Density Ratio (DDR) by Zone**
+
+Development density is highest in **`r ddr_1`** zones, reaching **`r ddr_1_value`**%, followed by **`r ddr_2`** (**`r ddr_2_value`**%) and **`r ddr_3`** (**`r ddr_3_value`**%). **`r ddr_4`** showed the lowest land utilization, with only **`r ddr_4_value`**% of plots developed.
+
+#### 7.7. **Price Band Analysis – Affordability Segmentation**
+
+Properties priced **`r band_labels[1]`** dominate the transaction spectrum, contributing over **`r band_1_pct`**% with **`r band_1_count`** sales. The **`r band_labels[2]`** range follows with **`r band_2_count`** transactions (**`r band_2_pct`**%), and deals priced **`r band_labels[3]`** account for **`r band_3_count`** units (**`r band_3_pct`**%). Premium properties **`r band_labels[4]`** total **`r band_4_count`** transactions, representing **`r band_4_pct`**%.
+
+
+### REPORT-8
+
+#### 8.1. **Highest Transaction in a Neighbourhood**
+
+The neighbourhood of **`r highest_neighbourhood`** achieved the highest capital inflow on **`r highest_date`**, recording a single transaction worth **`r highest_value`** for a **`r highest_area`** sqm property at **`r highest_rate`** per sqm. **`r top_zones`** also saw substantial activity.
+
+#### 8.2. **Most Active Areas by Transactions by Neighbourhood**
+
+**`r most_active_name`** tops the list of transaction-heavy neighbourhoods with over **`r most_active_count`** recorded deals, reinforcing its position as a key player in market turnover.
+
+#### 8.3. **Most Active Areas by Transactions by Zoning**
+
+**`r most_active_zone`**, with **`r most_active_zone_count`** deals, lead all zoning categories by transaction count, suggesting consistent demand for developable land. In comparison, **`r highest_value_zone_name`** outpace all others in value, crossing **`r highest_value_zone_total`** across **`r highest_value_zone_count`** transactions.
+
+#### 8.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+With a market-topping rate of **`r top_rate_1_value`**/sqm, **`r top_rate_1`** outperforms all neighbourhoods in residential building sales, based on **`r top_rate_1_count`** transactions. **`r top_rate_2`** and **`r top_rate_3`** follow with averages of **`r top_rate_2_value`** and **`r top_rate_3_value`**/sqm.
+
+#### 8.5. **High Demand, Low Supply Neighbourhoods**
+
+**`r high_demand_1`** leads the high-value low-supply segment with a striking **`r high_demand_1_rate`**/sqm for **`r high_demand_1_count`** transaction. Trailing it are **`r high_demand_2`** and **`r high_demand_3`**, recording average rates of **`r high_demand_2_rate`** and **`r high_demand_3_rate`**/sqm, based on **`r high_demand_2_count`** and **`r high_demand_3_count`** transactions respectively.
+
+#### 8.6. **Development Density Ratio (DDR) by Zone**
+
+In terms of DDR, **`r ddr_1`** zones dominate with **`r ddr_1_value`**% land coverage, while **`r ddr_2`** and **`r ddr_3`** show **`r ddr_2_value`**% and **`r ddr_3_value`**% development respectively. **`r ddr_4`** fall significantly lower, with a utilization of **`r ddr_4_value`**%.
+
+#### 8.7. **Price Band Analysis – Affordability Segmentation**
+
+The market is heavily weighted toward affordability, with **`r band_1_count`** properties (**`r band_1_pct`**%) sold in the **`r band_labels[1]`** band. Transactions in the **`r band_labels[2]`** band reached **`r band_2_count`** units (**`r band_2_pct`**%), while **`r band_3_count`** sales (**`r band_3_pct`**%) occurred in the **`r band_labels[3]`** range, and **`r band_4_count`** (**`r band_4_pct`**%) in the **`r band_labels[4]`** bracket.
+
+---
+
+### REPORT-9
+
+#### 9.1. **Highest Transaction in a Neighbourhood**
+
+On **`r highest_date`**, **`r highest_neighbourhood`** recorded a high-value real estate deal amounting to **`r highest_value`**, driven by a **`r highest_area`** sqm plot at a premium rate of **`r highest_rate`**/sqm—making it the leading neighbourhood by transaction value. **`r top_zones`** followed suit.
+
+#### 9.2. **Most Active Areas by Transactions by Neighbourhood**
+
+A total exceeding **`r most_active_count`** transactions places **`r most_active_name`** at the forefront of neighbourhood activity, indicative of sustained demand and investment momentum.
+
+#### 9.3. **Most Active Areas by Transactions by Zoning**
+
+The most active zoning type by volume is **`r most_active_zone`**, with **`r most_active_zone_count`** transactions, underscoring the preference for land-based investments. **`r highest_value_zone_name`**, despite fewer deals (**`r highest_value_zone_count`**), command the highest transaction value, totalling over **`r highest_value_zone_total`**.
+
+#### 9.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+**`r top_rate_1`** achieved the highest average property price at **`r top_rate_1_value`**/sqm across **`r top_rate_1_count`** residential building transactions, outperforming **`r top_rate_2`** (**`r top_rate_2_value`**/sqm, **`r top_rate_2_count`** deals) and **`r top_rate_3`** (**`r top_rate_3_value`**/sqm, **`r top_rate_3_count`** deals).
+
+#### 9.5. **High Demand, Low Supply Neighbourhoods**
+
+Among neighbourhoods with limited transaction volume but high pricing, **`r high_demand_1`** stands at the top, with an average of **`r high_demand_1_rate`**/sqm from **`r high_demand_1_count`** deal. **`r high_demand_2`** follows with **`r high_demand_2_rate`**/sqm (**`r high_demand_2_count`** sales), and **`r high_demand_3`** at **`r high_demand_3_rate`**/sqm (**`r high_demand_3_count`** sales).
+
+#### 9.6. **Development Density Ratio (DDR) by Zone**
+
+The study found **`r ddr_1`** areas achieved an **`r ddr_1_value`**% development density, making them the most built-up zones. **`r ddr_2`** and **`r ddr_3`** utilized **`r ddr_2_value`**% and **`r ddr_3_value`**% of their land, whereas **`r ddr_4`** areas had the lowest at **`r ddr_4_value`**%.
+
+#### 9.7. **Price Band Analysis – Affordability Segmentation**
+
+With over **`r band_1_pct`**% of transactions (**`r band_1_count`** properties) occurring **`r band_labels[1]`**, the data underlines a strong preference for budget-friendly real estate. Mid-range segments between **`r band_labels[2]`** recorded **`r band_2_count`** transactions (**`r band_2_pct`**%), followed by **`r band_labels[3]`** with **`r band_3_count`** units (**`r band_3_pct`**%), and **`r band_labels[4]`** comprising **`r band_4_count`** transactions (**`r band_4_pct`**%).
+
+---
+
+### REPORT-10
+
+#### 10.1. **Highest Transaction in a Neighbourhood**
+
+**`r highest_neighbourhood`** led the market on **`r highest_date`**, with the highest-value transaction of **`r highest_value`**, based on a **`r highest_area`** sqm property at **`r highest_rate`** per sqm—indicating elite investor interest. **`r top_zones`** were subsequent top performers.
+
+#### 10.2. **Most Active Areas by Transactions by Neighbourhood**
+
+With its transaction count crossing the **`r most_active_count`** mark, **`r most_active_name`** clearly leads the market in terms of activity and demonstrates exceptional real estate liquidity.
+
+#### 10.3. **Most Active Areas by Transactions by Zoning**
+
+While **`r most_active_zone`** recorded the most transactions (**`r most_active_zone_count`**), driven by development or resale interest, it is **`r highest_value_zone_name`** that lead in value, contributing more than **`r highest_value_zone_total`** from **`r highest_value_zone_count`** transactions.
+
+#### 10.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+Based on transaction data, **`r top_rate_1`** tops all neighbourhoods with an average of **`r top_rate_1_value`** per sqm over **`r top_rate_1_count`** deals, while **`r top_rate_2`** and **`r top_rate_3`** followed at **`r top_rate_2_value`** and **`r top_rate_3_value`**/sqm from **`r top_rate_2_count`** and **`r top_rate_3_count`** transactions.
+
+#### 10.5. **High Demand, Low Supply Neighbourhoods**
+
+**`r high_demand_1`**, with **`r high_demand_1_count`** transaction, recorded the highest average rate of **`r high_demand_1_rate`**/sqm, placing it atop high-demand, low-supply zones. **`r high_demand_2`** and **`r high_demand_3`** closely followed with averages of **`r high_demand_2_rate`** and **`r high_demand_3_rate`**/sqm.
+
+#### 10.6. **Development Density Ratio (DDR) by Zone**
+
+Zonal analysis reveals **`r ddr_1`** areas with the most intensive development (**`r ddr_1_value`**%), outpacing **`r ddr_2`** (**`r ddr_2_value`**%) and **`r ddr_3`** (**`r ddr_3_value`**%). **`r ddr_4`** zones remained the least dense, with **`r ddr_4_value`**% land use.
+
+#### 10.7. **Price Band Analysis – Affordability Segmentation**
+
+Most transactions (**`r band_1_count`** units, over **`r band_1_pct`**%) fell within the **`r band_labels[1]`** affordability band. The next segment (**`r band_labels[2]`**) contributed **`r band_2_pct`**% with **`r band_2_count`** properties, while the **`r band_labels[3]`** and **`r band_labels[1]`** brackets accounted for **`r band_3_pct`**% (**`r band_3_count`** transactions) and **`r band_4_pct`**% (**`r band_4_count`** transactions) respectively.
+
+
+
+
+### REPORT-11
+
+#### 11.1. **Highest Transaction in a Neighbourhood**
+
+The transaction that set the benchmark occurred in **`r highest_neighbourhood`** on **`r highest_date`**—valued at **`r highest_value`** for a **`r highest_area`** sqm asset priced at **`r highest_rate`** per sqm. The neighbourhoods of **`r top_zones`** were also among the leading zones for investment.
+
+#### 11.2. **Most Active Areas by Transactions by Neighbourhood**
+
+**`r most_active_name`** is the most transactionally active neighbourhood, with over **`r most_active_count`** real estate deals, reflecting a dynamic, fast-moving market.
+
+#### 11.3. **Most Active Areas by Transactions by Zoning**
+
+Transaction trends reveal **`r most_active_zone`** as the top category in volume (**`r most_active_zone_count`** deals), indicating high demand for land. Conversely, **`r highest_value_zone_name`**, though transacted less frequently (**`r highest_value_zone_count`** deals), generated the largest cumulative value—over **`r highest_value_zone_total`**.
+
+#### 11.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+The highest average rate in the residential building category is held by **`r top_rate_1`** at **`r top_rate_1_value`**/sqm (**`r top_rate_1_count`** sales), followed by **`r top_rate_2`** (**`r top_rate_2_value`**/sqm, **`r top_rate_2_count`** sales) and **`r top_rate_3`** (**`r top_rate_3_value`**/sqm, **`r top_rate_3_count`** sales).
+
+#### 11.5. **High Demand, Low Supply Neighbourhoods**
+
+High-rate, low-transaction areas are led by **`r high_demand_1`**, achieving **`r high_demand_1_rate`**/sqm from **`r high_demand_1_count`** transaction, ahead of **`r high_demand_2`** (**`r high_demand_2_count`** deals at **`r high_demand_2_rate`**/sqm) and **`r high_demand_3`** (**`r high_demand_3_count`** deals at **`r high_demand_3_rate`**/sqm).
+
+#### 11.6. **Development Density Ratio (DDR) by Zone**
+
+The DDR distribution ranks **`r ddr_1`** at the top with **`r ddr_1_value`**% land utilization, followed by **`r ddr_2`** (**`r ddr_2_value`**%) and **`r ddr_3`** (**`r ddr_3_value`**%). **`r ddr_4`** zones use only **`r ddr_4_value`**% of land for construction.
+
+#### 11.7. **Price Band Analysis – Affordability Segmentation**
+
+Affordable housing remains dominant, with **`r band_1_count`** transactions **`r band_labels[1]`**, exceeding **`r band_1_pct`**% of market volume. Mid-tier price points from **`r band_labels[2]`** followed at **`r band_2_pct`**% (**`r band_2_count`** transactions), while the **`r band_labels[3]`** and **`r band_labels[4]`** tiers recorded **`r band_3_pct`**% and **`r band_4_pct`**% respectively.
+
+---
+
+### REPORT-12
+
+#### 12.1. **Highest Transaction in a Neighbourhood**
+
+**`r highest_neighbourhood`** commanded investor attention with a high-value deal dated **`r highest_date`**, where a property of **`r highest_area`** sqm was acquired at **`r highest_rate`**/sqm, totalling **`r highest_value`**. This placed it ahead of **`r top_zones`** in investment rankings.
+
+#### 12.2. **Most Active Areas by Transactions by Neighbourhood**
+
+The highest transaction activity was observed in **`r most_active_name`**, which registered more than **`r most_active_count`** deals, highlighting it as a focal point of real estate interest.
+
+#### 12.3. **Most Active Areas by Transactions by Zoning**
+
+In the zoning breakdown, **`r most_active_zone`** account for the largest number of transactions (**`r most_active_zone_count`**), while **`r highest_value_zone_name`**, with only **`r highest_value_zone_count`** transactions, outperformed all categories in value—topping **`r highest_value_zone_total`**.
+
+#### 12.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+In terms of average price per sqm, **`r top_rate_1`** stands out with **`r top_rate_1_value`** over **`r top_rate_1_count`** residential building transactions, ahead of **`r top_rate_2`** (**`r top_rate_2_value`**, **`r top_rate_2_count`** deals) and **`r top_rate_3`** (**`r top_rate_3_value`**, **`r top_rate_3_count`** deals).
+
+#### 12.5. **High Demand, Low Supply Neighbourhoods**
+
+In the constrained-supply bracket, **`r high_demand_1`** leads with an exceptional **`r high_demand_1_rate`** per sqm, driven by **`r high_demand_1_count`** transaction. **`r high_demand_2`** and **`r high_demand_3`** follow with average rates of **`r high_demand_2_rate`** and **`r high_demand_3_rate`**, across **`r high_demand_2_count`** and **`r high_demand_3_count`** transactions respectively.
+
+#### 12.6. **Development Density Ratio (DDR) by Zone**
+
+A comparison of development intensity shows **`r ddr_1`** zones most efficiently used, with **`r ddr_1_value`**% land built-up, followed by **`r ddr_2`** at **`r ddr_2_value`**%, **`r ddr_3`** at **`r ddr_3_value`**%, and **`r ddr_4`** with minimal development at **`r ddr_4_value`**%.
+
+#### 12.7. **Price Band Analysis – Affordability Segmentation**
+
+Data analysis shows that affordable properties (priced **`r band_labels[1]`**) form the core of the market with **`r band_1_count`** transactions—representing over **`r band_1_pct`**% of the volume. The **`r band_labels[2]`** and **`r band_labels[3]`** brackets made up **`r band_2_pct`**% (**`r band_2_count`**) and **`r band_3_pct`**% (**`r band_3_count`**), while high-end assets **`r band_labels[4]`** reached **`r band_4_count`** sales (**`r band_4_pct`**%).
+
+---
+
+### REPORT-13
+
+#### 13.1. **Highest Transaction in a Neighbourhood**
+
+A premium transaction in **`r highest_neighbourhood`** on **`r highest_date`**, amounting to **`r highest_value`** at **`r highest_rate`**/sqm for **`r highest_area`** sqm, established it as the top-performing neighbourhood. **`r top_zones`** also recorded noteworthy investment volumes.
+
+#### 13.2. **Most Active Areas by Transactions by Neighbourhood**
+
+Surpassing **`r most_active_count`** transactions, **`r most_active_name`** leads all neighbourhoods in deal count, pointing to its attractiveness and steady market circulation.
+
+#### 13.3. **Most Active Areas by Transactions by Zoning**
+
+**`r most_active_zone`**, with **`r most_active_zone_count`** transactions, are the most commonly traded assets, reflecting widespread market activity. Meanwhile, **`r highest_value_zone_name`** posted the highest total deal value at **`r highest_value_zone_total`**, despite recording only **`r highest_value_zone_count`** deals.
+
+#### 13.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+Among residential building transactions, **`r top_rate_1`** leads the way with an average of **`r top_rate_1_value`** per sqm, drawn from **`r top_rate_1_count`** sales. **`r top_rate_2`** and **`r top_rate_3`** follow with respective rates of **`r top_rate_2_value`** and **`r top_rate_3_value`**.
+
+#### 13.5. **High Demand, Low Supply Neighbourhoods**
+
+A standout in the low-supply, high-value category, **`r high_demand_1`** reached **`r high_demand_1_rate`**/sqm with **`r high_demand_1_count`** transaction, outperforming **`r high_demand_2`** and **`r high_demand_3`** at **`r high_demand_2_rate`** (**`r high_demand_2_count`** transactions) and **`r high_demand_3_rate`** (**`r high_demand_3_count`** transactions).
+
+#### 13.6. **Development Density Ratio (DDR) by Zone**
+
+Land use efficiency is highest in **`r ddr_1`** zones, where **`r ddr_1_value`**% of the area is built upon. This contrasts with **`r ddr_2`** (**`r ddr_2_value`**%), **`r ddr_3`** (**`r ddr_3_value`**%), and **`r ddr_4`**, which lag at **`r ddr_4_value`**%.
+
+#### 13.7. **Price Band Analysis – Affordability Segmentation**
+
+The largest concentration of property sales lies in the **`r band_labels[1]`** band with **`r band_1_count`** units (**`r band_1_pct`**%). The **`r band_labels[2]`** segment comprised **`r band_2_count`** transactions (**`r band_2_pct`**%), followed by **`r band_3_count`** transactions (**`r band_3_pct`**%) in the **`r band_labels[3]`** range, and **`r band_4_count`** (**`r band_4_pct`**%) in the **`r band_labels[4]`** category.
+
+
+
+### REPORT-14
+
+#### 14.1. **Highest Transaction in a Neighbourhood**
+
+On **`r highest_date`**, a milestone property deal was recorded in **`r highest_neighbourhood`**—**`r highest_value`** for a **`r highest_area`** sqm plot at **`r highest_rate`** per sqm—signifying heightened market interest. The neighbourhoods of **`r top_zones`** followed in terms of investment magnitude.
+
+#### 14.2. **Most Active Areas by Transactions by Neighbourhood**
+
+The neighbourhood of **`r most_active_name`** experienced over **`r most_active_count`** transactions, solidifying its status as the most liquid and active area in the current market.
+
+#### 14.3. **Most Active Areas by Transactions by Zoning**
+
+Data shows that **`r most_active_zone`** are the most transacted zoning type (**`r most_active_zone_count`** transactions), reflecting popularity among developers and investors. **`r highest_value_zone_name`**, however, lead in deal size, generating **`r highest_value_zone_total`** through fewer transactions (**`r highest_value_zone_count`**).
+
+#### 14.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+**`r top_rate_1`**, with **`r top_rate_1_count`** transactions, records the highest per sqm rate at **`r top_rate_1_value`** in the residential building segment. **`r top_rate_2`** and **`r top_rate_3`** posted rates of **`r top_rate_2_value`** and **`r top_rate_3_value`**, over **`r top_rate_2_count`** and **`r top_rate_3_count`** transactions respectively.
+
+#### 14.5. **High Demand, Low Supply Neighbourhoods**
+
+In neighbourhoods with limited sales but premium pricing, **`r high_demand_1`** posted a commanding **`r high_demand_1_rate`**/sqm for its sole transaction. **`r high_demand_2`** and **`r high_demand_3`** followed at **`r high_demand_2_rate`** and **`r high_demand_3_rate`** per sqm.
+
+#### 14.6. **Development Density Ratio (DDR) by Zone**
+
+The most compactly developed areas are **`r ddr_1`** zones, boasting an **`r ddr_1_value`**% DDR. In contrast, **`r ddr_2`** and **`r ddr_3`** follow with **`r ddr_2_value`**% and **`r ddr_3_value`**%, while **`r ddr_4`** reflect limited development, utilizing only **`r ddr_4_value`**% of their land.
+
+#### 14.7. **Price Band Analysis – Affordability Segmentation**
+
+Property sales predominantly cluster in the affordable band (**`r band_labels[1]`**), with **`r band_1_count`** deals, equating to over **`r band_1_pct`**% of the market. **`r band_labels[2]`** transactions reached **`r band_2_count`** (**`r band_2_pct`**%), while the **`r band_labels[3]`** and **`r band_labels[4]`** tiers held **`r band_3_pct`**% (**`r band_3_count`**) and **`r band_4_pct`**% (**`r band_4_count`**) shares respectively.
+
+---
+
+### REPORT-15
+
+#### 15.1. **Highest Transaction in a Neighbourhood**
+
+**`r highest_neighbourhood`** outpaced all neighbourhoods in transaction value on **`r highest_date`**, through a singular high-end acquisition worth **`r highest_value`** (**`r highest_rate`**/sqm for **`r highest_area`** sqm). This was trailed by **`r top_zones`** in investment rankings.
+
+#### 15.2. **Most Active Areas by Transactions by Neighbourhood**
+
+As the leading neighbourhood by transaction volume, **`r most_active_name`** saw more than **`r most_active_count`** property deals, underscoring continuous investor engagement.
+
+#### 15.3. **Most Active Areas by Transactions by Zoning**
+
+While **`r most_active_zone`** saw the greatest number of transactions (**`r most_active_zone_count`**), suggesting consistent turnover, **`r highest_value_zone_name`** delivered the highest monetary value—**`r highest_value_zone_total`** from **`r highest_value_zone_count`** deals, indicating larger-scale investments.
+
+#### 15.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+Property rate analysis reveals **`r top_rate_1`** as the top-performing neighbourhood at **`r top_rate_1_value`**/sqm across **`r top_rate_1_count`** sales. **`r top_rate_2`** and **`r top_rate_3`** recorded strong performances as well, averaging **`r top_rate_2_value`** and **`r top_rate_3_value`**/sqm.
+
+#### 15.5. **High Demand, Low Supply Neighbourhoods**
+
+**`r high_demand_1`** recorded the highest value per square meter at **`r high_demand_1_rate`**, despite just **`r high_demand_1_count`** sale—highlighting its exclusivity. It was followed by **`r high_demand_2`** and **`r high_demand_3`**, with respective averages of **`r high_demand_2_rate`** (**`r high_demand_2_count`** sales) and **`r high_demand_3_rate`** (**`r high_demand_3_count`** sales).
+
+#### 15.6. **Development Density Ratio (DDR) by Zone**
+
+The average DDR in **`r ddr_1`** zones was **`r ddr_1_value`**%, indicating high land utilization. This was followed by **`r ddr_2`** at **`r ddr_2_value`**%, **`r ddr_3`** at **`r ddr_3_value`**%, and **`r ddr_4`** at a modest **`r ddr_4_value`**%.
+
+#### 15.7. **Price Band Analysis – Affordability Segmentation**
+
+The majority of transactions, **`r band_1_count`** properties, were concentrated in the **`r band_labels[1]`** range, indicating affordability-driven demand (**`r band_1_pct`**% share). Mid-segment (**`r band_labels[2]`**) properties followed with **`r band_2_count`** deals (**`r band_2_pct`**%), while premium segments **`r band_labels[3]`** and **`r band_labels[4]`** made up **`r band_3_pct`**% and **`r band_4_pct`**% of the total.
+
+---
+
+### REPORT-16
+
+#### 16.1. **Highest Transaction in a Neighbourhood**
+
+In a leading transaction on **`r highest_date`**, **`r highest_neighbourhood`** posted a deal valued at **`r highest_value`**, secured at **`r highest_rate`**/sqm for **`r highest_area`** sqm, emphasizing strong investor demand. **`r top_zones`** also captured substantial attention.
+
+#### 16.2. **Most Active Areas by Transactions by Neighbourhood**
+
+Transactional analysis shows **`r most_active_name`** as the highest-performing area, with deal counts exceeding **`r most_active_count`**, highlighting strong liquidity and demand.
+
+#### 16.3. **Most Active Areas by Transactions by Zoning**
+
+The market shows a preference for **`r most_active_zone`** by volume (**`r most_active_zone_count`** transactions), but a higher value concentration in **`r highest_value_zone_name`**, which, with just **`r highest_value_zone_count`** deals, surpassed **`r highest_value_zone_total`** in total value.
+
+#### 16.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+**`r top_rate_1`** stands at the forefront with an average rate of **`r top_rate_1_value`**/sqm from **`r top_rate_1_count`** residential building transactions, surpassing **`r top_rate_2`** (**`r top_rate_2_value`**, **`r top_rate_2_count`** sales) and **`r top_rate_3`** (**`r top_rate_3_value`**, **`r top_rate_3_count`** sales).
+
+#### 16.5. **High Demand, Low Supply Neighbourhoods**
+
+The top-performing neighbourhood by value per sqm in low-supply conditions is **`r high_demand_1`**, reaching **`r high_demand_1_rate`** with **`r high_demand_1_count`** deal. **`r high_demand_2`** and **`r high_demand_3`** follow closely with **`r high_demand_2_rate`** and **`r high_demand_3_rate`**/sqm.
+
+#### 16.6. **Development Density Ratio (DDR) by Zone**
+
+**`r ddr_1`** zones demonstrate the highest structural density with **`r ddr_1_value`**% DDR. **`r ddr_2`** stand at **`r ddr_2_value`**%, **`r ddr_3`** at **`r ddr_3_value`**%, and **`r ddr_4`** register the lowest development ratio at just **`r ddr_4_value`**%.
+
+#### 16.7. **Price Band Analysis – Affordability Segmentation**
+
+Affordability remains a key determinant in property choices, with over **`r band_1_pct`**% of all transactions (**`r band_1_count`** units) **`r band_labels[1]`**. Properties within the **`r band_labels[2]`** and **`r band_labels[3]`** bands saw **`r band_2_count`** (**`r band_2_pct`**%) and **`r band_3_count`** (**`r band_3_pct`**%) sales, while high-value sales **`r band_labels[4]`** reached **`r band_4_count`** transactions (**`r band_4_pct`**%).
+
+
+### REPORT-17
+
+#### 17.1. **Highest Transaction in a Neighbourhood**
+
+**`r highest_neighbourhood`** emerged as the neighbourhood with the highest single-property investment, marked by a **`r highest_value`** transaction on **`r highest_date`**, involving a **`r highest_area`** sqm plot at **`r highest_rate`**/sqm. **`r top_zones`** ranked next in capital inflow.
+
+#### 17.2. **Most Active Areas by Transactions by Neighbourhood**
+
+With over **`r most_active_count`** recorded real estate transactions, **`r most_active_name`** showcases a consistently high level of activity, indicative of its market vitality.
+
+#### 17.3. **Most Active Areas by Transactions by Zoning**
+
+**`r most_active_zone`** saw **`r most_active_zone_count`** transactions, more than any other zoning type, indicating ongoing development interest. **`r highest_value_zone_name`**, with **`r highest_value_zone_count`** transactions, captured the highest total transaction value, exceeding **`r highest_value_zone_total`**.
+
+#### 17.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+Leading in pricing, **`r top_rate_1`** averaged **`r top_rate_1_value`** per sqm over **`r top_rate_1_count`** deals in residential buildings. Close behind were **`r top_rate_2`** at **`r top_rate_2_value`**/sqm (**`r top_rate_2_count`** deals) and **`r top_rate_3`** at **`r top_rate_3_value`**/sqm (**`r top_rate_3_count`** deals).
+
+#### 17.5. **High Demand, Low Supply Neighbourhoods**
+
+Among areas showing limited activity but high per-unit pricing, **`r high_demand_1`** is at the forefront with **`r high_demand_1_count`** transaction at **`r high_demand_1_rate`**/sqm, followed by **`r high_demand_2`** (**`r high_demand_2_count`** transactions at **`r high_demand_2_rate`**) and **`r high_demand_3`** (**`r high_demand_3_count`** transactions at **`r high_demand_3_rate`**).
+
+#### 17.6. **Development Density Ratio (DDR) by Zone**
+
+Of all zones studied, **`r ddr_1`** leads with a built-up area covering **`r ddr_1_value`**% of total land. **`r ddr_2`** and **`r ddr_3`** showed medium-density ratios of **`r ddr_2_value`**% and **`r ddr_3_value`**%, while **`r ddr_4`** zones trailed at **`r ddr_4_value`**%.
+
+#### 17.7. **Price Band Analysis – Affordability Segmentation**
+
+Transaction analysis shows a dominant share in the **`r band_labels[1]`** category (**`r band_1_count`** units, **`r band_1_pct`**%), followed by a robust mid-range (**`r band_labels[2]`**) segment with **`r band_2_count`** deals (**`r band_2_pct`**%). The **`r band_labels[3]`** and **`r band_labels[4]`** ranges comprised **`r band_3_pct`**% and **`r band_4_pct`**%, respectively.
+
+---
+
+### REPORT-18
+
+#### 18.1. **Highest Transaction in a Neighbourhood**
+
+The transaction of **`r highest_value`** on **`r highest_date`**, for a **`r highest_area`** sqm asset in **`r highest_neighbourhood`** (**`r highest_rate`** per sqm) positioned it as the foremost destination for premium investment. **`r top_zones`** followed as high-ranking neighbourhoods.
+
+#### 18.2. **Most Active Areas by Transactions by Neighbourhood**
+
+**`r most_active_name`** recorded more than **`r most_active_count`** transactions, making it the top neighbourhood for real estate activity and a stronghold for investor confidence.
+
+#### 18.3. **Most Active Areas by Transactions by Zoning**
+
+Leading in transaction count, **`r most_active_zone`** posted **`r most_active_zone_count`** deals, illustrating investor appetite for land. In contrast, **`r highest_value_zone_name`** drove over **`r highest_value_zone_total`** in value from just **`r highest_value_zone_count`** transactions, emphasizing high-value asset targeting.
+
+#### 18.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+**`r top_rate_1`** reported the highest rate in residential property at **`r top_rate_1_value`**/sqm from **`r top_rate_1_count`** transactions, outperforming **`r top_rate_2`** and **`r top_rate_3`**, which posted **`r top_rate_2_value`** and **`r top_rate_3_value`**/sqm, respectively.
+
+#### 18.5. **High Demand, Low Supply Neighbourhoods**
+
+Neighbourhood-level data shows **`r high_demand_1`** achieving the highest rate—**`r high_demand_1_rate`** per sqm from **`r high_demand_1_count`** transaction—while **`r high_demand_2`** and **`r high_demand_3`** registered **`r high_demand_2_rate`** and **`r high_demand_3_rate`** per sqm across **`r high_demand_2_count`** and **`r high_demand_3_count`** sales.
+
+#### 18.6. **Development Density Ratio (DDR) by Zone**
+
+**`r ddr_1`** zones, with **`r ddr_1_value`**% average development density, reflect the most efficient land use. **`r ddr_2`** and **`r ddr_3`** follow at **`r ddr_2_value`**% and **`r ddr_3_value`**%, with **`r ddr_4`** zones showing the least utilization at **`r ddr_4_value`**%.
+
+#### 18.7. **Price Band Analysis – Affordability Segmentation**
+
+The affordability bracket **`r band_labels[1]`** emerged as the most active segment, covering **`r band_1_count`** transactions (over **`r band_1_pct`**%). In comparison, **`r band_2_count`** units (**`r band_2_pct`**%) were exchanged in the **`r band_labels[2]`** range, **`r band_3_count`** transactions (**`r band_3_pct`**%) in **`r band_labels[3]`**, and **`r band_4_count`** (**`r band_4_pct`**%) **`r band_labels[4]`**.
+
+---
+
+### REPORT-19
+
+#### 19.1. **Highest Transaction in a Neighbourhood**
+
+With a benchmark deal dated **`r highest_date`**, worth **`r highest_value`** (**`r highest_rate`**/sqm across **`r highest_area`** sqm), **`r highest_neighbourhood`** stood out in the investment landscape. **`r top_zones`** also saw notable capital inflow.
+
+#### 19.2. **Most Active Areas by Transactions by Neighbourhood**
+
+Reflecting over **`r most_active_count`** transactions, **`r most_active_name`** demonstrates exceptional market velocity and ongoing transactional momentum.
+
+#### 19.3. **Most Active Areas by Transactions by Zoning**
+
+Investors showed strongest transactional activity in **`r most_active_zone`** (**`r most_active_zone_count`** deals), likely due to development flexibility, while **`r highest_value_zone_name`**, though fewer in number (**`r highest_value_zone_count`** deals), delivered the highest overall value at over **`r highest_value_zone_total`**.
+
+#### 19.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+With **`r top_rate_1_count`** transactions, **`r top_rate_1`** commands the top average rate of **`r top_rate_1_value`** per sqm in the residential category, with **`r top_rate_2`** and **`r top_rate_3`** closely behind at **`r top_rate_2_value`** and **`r top_rate_3_value`**.
+
+#### 19.5. **High Demand, Low Supply Neighbourhoods**
+
+In zones with high pricing but minimal turnover, **`r high_demand_1`** leads at **`r high_demand_1_rate`**/sqm (**`r high_demand_1_count`** deal), with **`r high_demand_2`** and **`r high_demand_3`** following at **`r high_demand_2_rate`** (**`r high_demand_2_count`** deals) and **`r high_demand_3_rate`** (**`r high_demand_3_count`** deals).
+
+#### 19.6. **Development Density Ratio (DDR) by Zone**
+
+Evaluating land coverage by built-up area, **`r ddr_1`** zones come out on top with **`r ddr_1_value`**% utilization, followed by **`r ddr_2`** (**`r ddr_2_value`**%), **`r ddr_3`** (**`r ddr_3_value`**%), and **`r ddr_4`**, which reflect sparse development at **`r ddr_4_value`**%.
+
+#### 19.7. **Price Band Analysis – Affordability Segmentation**
+
+More than **`r band_1_count`** properties, or **`r band_1_pct`**% of total deals, were executed **`r band_labels[1]`**, emphasizing strong affordable housing momentum. Mid-tier segments of **`r band_labels[2]`** and **`r band_labels[3]`** saw **`r band_2_count`** transactions (**`r band_2_pct`**%) and **`r band_3_count`** (**`r band_3_pct`**%), with high-value sales topping at **`r band_4_count`** (**`r band_4_pct`**%) in the **`r band_labels[4]`** category.
+
+---
+
+### REPORT-20
+
+#### 20.1. **Highest Transaction in a Neighbourhood**
+
+A standout transaction in **`r highest_neighbourhood`** on **`r highest_date`**—valued at **`r highest_value`** and spanning **`r highest_area`** sqm at **`r highest_rate`**/sqm—cemented its position as the top neighbourhood by investment. **`r top_zones`** followed as significant contributors.
+
+#### 20.2. **Most Active Areas by Transactions by Neighbourhood**
+
+Among all neighbourhoods, **`r most_active_name`** leads in transaction frequency with more than **`r most_active_count`** property deals, indicating persistent demand and active market circulation.
+
+#### 20.3. **Most Active Areas by Transactions by Zoning**
+
+The transaction landscape is led by **`r most_active_zone`** with **`r most_active_zone_count`** deals, reflecting a focus on development opportunities. Meanwhile, **`r highest_value_zone_name`** achieved a higher financial footprint—**`r highest_value_zone_total`** from **`r highest_value_zone_count`** deals—despite lower deal count.
+
+#### 20.4. **Neighbourhoods with the Highest Property Rates (SAR/sqm)**
+
+The highest per sqm rate was seen in **`r top_rate_1`** at **`r top_rate_1_value`**, from **`r top_rate_1_count`** residential building sales. **`r top_rate_2`** and **`r top_rate_3`** maintained strong averages of **`r top_rate_2_value`** and **`r top_rate_3_value`**, across **`r top_rate_2_count`** and **`r top_rate_3_count`** transactions, respectively.
+
+#### 20.5. **High Demand, Low Supply Neighbourhoods**
+
+The highest average property rate among low-supply neighbourhoods was recorded in **`r high_demand_1`** at **`r high_demand_1_rate`** per sqm, based on **`r high_demand_1_count`** transaction. **`r high_demand_2`** and **`r high_demand_3`** followed closely with rates of **`r high_demand_2_rate`** and **`r high_demand_3_rate`**, supported by **`r high_demand_2_count`** and **`r high_demand_3_count`** transactions, respectively.
+
+#### 20.6. **Development Density Ratio (DDR) by Zone**
+
+Land development in **`r ddr_1`** zones reached **`r ddr_1_value`**%, showcasing maximum utilization. **`r ddr_2`** followed at **`r ddr_2_value`**%, **`r ddr_3`** with **`r ddr_3_value`**%, while **`r ddr_4`** showed restrained development at **`r ddr_4_value`**%.
+
+#### 20.7. **Price Band Analysis – Affordability Segmentation**
+
+The **`r band_labels[1]`** segment accounted for the majority with **`r band_1_count`** transactions, exceeding **`r band_1_pct`**%. Meanwhile, **`r band_labels[2]`** comprised **`r band_2_pct`**% (**`r band_2_count`**), **`r band_labels[3]`** stood at **`r band_3_pct`**% (**`r band_3_count`**), and **`r band_labels[4]`** represented **`r band_4_pct`**% (**`r band_4_count`**).
+
+
+## Arabic Reports {.tabset}
+
+### REPORT-1
+#### 1.1. **أعلى معاملة في حي**
+
+في **`r highest_date`**، سجل حي **`r highest_neighbourhood`** أعلى نشاط استثماري، بصفقة عقارية كبيرة بلغت قيمتها **`r highest_value`** لعقار بمساحة **`r highest_area`** متر مربع، وبسعر مميز قدره **`r highest_rate`** ريال/م²—مما يعكس ثقة المستثمرين. تلتها مناطق **`r top_zones`** من حيث قيمة الاستثمار.
+
+#### 1.2. **المناطق الأكثر نشاطًا حسب المعاملات والحي**
+
+برز حي **`r most_active_name`** كأكثر الأحياء نشاطًا، مسجلًا أكثر من **`r most_active_count`** معاملة، مما يدل على سيولة عالية واهتمام مستمر من المستثمرين.
+
+#### 1.3. **المناطق الأكثر نشاطًا حسب المعاملات والتقسيم**
+
+تصدرت منطقة **`r most_active_zone`** من حيث عدد المعاملات بـ **`r most_active_zone_count`** صفقة، مما يعكس اهتمامًا قويًا بتطوير الأراضي وإعادة البيع. في المقابل، تفوقت **`r highest_value_zone_name`** من حيث القيمة الإجمالية رغم عدد معاملات أقل (**`r highest_value_zone_count`**)، بإجمالي تجاوز **`r highest_value_zone_total`** ريال.
+
+#### 1.4. **الأحياء ذات أعلى معدلات الأسعار (ريال/م²)**
+
+تصدرت **`r top_rate_1`** القائمة بمعدل سعر **`r top_rate_1_value`** ريال/م²، بناءً على **`r top_rate_1_count`** معاملة في منطقة المباني السكنية. تلتها **`r top_rate_2`** و **`r top_rate_3`** بمعدل **`r top_rate_2_value`** و **`r top_rate_3_value`** ريال/م²، من خلال **`r top_rate_2_count`** و **`r top_rate_3_count`** معاملة على التوالي.
+
+#### 1.5. **أحياء ذات طلب مرتفع وعرض منخفض**
+
+احتل حي **`r high_demand_1`** الصدارة من حيث الطلب المرتفع والعرض المنخفض، بسعر **`r high_demand_1_rate`** ريال/م² في **`r high_demand_1_count`** معاملة. تلاه كل من **`r high_demand_2`** و **`r high_demand_3`** بمعدلات **`r high_demand_2_rate`** و **`r high_demand_3_rate`** ريال/م² لكل منهما، بناءً على **`r high_demand_2_count`** و **`r high_demand_3_count`** معاملة على التوالي.
+
+#### 1.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+سجلت مناطق **`r ddr_1`** أعلى متوسط لنسبة كثافة التطوير، حيث بلغت المساحة المبنية **`r ddr_1_value`**% من الأراضي المتاحة. تلتها **`r ddr_2`** بنسبة **`r ddr_2_value`**%، ثم **`r ddr_3`** بنسبة **`r ddr_3_value`**%، بينما كانت **`r ddr_4`** الأدنى بنسبة **`r ddr_4_value`**%.
+
+#### 1.7. **تحليل شرائح الأسعار – توزيع القدرة على الشراء**
+
+تشير التحليلات إلى أن أكبر نسبة من المعاملات—أكثر من **`r band_1_pct`**%—تقع ضمن فئة أقل من 500,000 ريال، وتمثل **`r band_1_count`** عقارًا. أما الفئة بين 500 ألف إلى مليون ريال فتمثل **`r band_2_pct`**% (**`r band_2_count`** وحدة)، وتليها فئة المليون إلى مليونين بنسبة **`r band_3_pct`**% (**`r band_3_count`** صفقة). فيما تشكل المعاملات التي تتجاوز مليوني ريال نسبة **`r band_4_pct`**% من الإجمالي، بعدد **`r band_4_count`** وحدة.
+
+
+
+### REPORT-2
+#### 2.1. **أعلى معاملة في حي**
+
+إظهارًا لاهتمام المستثمرين الاستثنائي، سجل حي **`r highest_neighbourhood`** أعلى معاملة في مجموعة البيانات بتاريخ **`r highest_date`**، بصفقة بلغت قيمتها **`r highest_value`** ريال لعقار بمساحة **`r highest_area`** متر مربع، وبسعر **`r highest_rate`** ريال/م². كما ظهرت مناطق **`r top_zones`** بوضوح في التسلسل الهرمي الاستثماري.
+
+#### 2.2. **المناطق الأكثر نشاطًا حسب المعاملات (حسب الحي)**
+
+مع عدد معاملات تجاوز **`r most_active_count`**، يبرز حي **`r most_active_name`** كأكثر الأحياء نشاطًا في السوق، ما يعكس بيئة عقارية نابضة بالحيوية والسيولة.
+
+#### 2.3. **المناطق الأكثر نشاطًا حسب المعاملات (حسب نوع التقسيم)**
+
+سجلت فئة **`r most_active_zone`** أعلى عدد من المعاملات بـ **`r most_active_zone_count`** صفقة، مما يشير إلى وجود طلب نشط على الاستثمار العقاري. وعلى النقيض، سجلت **`r highest_value_zone_name`** عددًا أقل من الصفقات (**`r highest_value_zone_count`**)، لكنها حققت أعلى قيمة إجمالية تجاوزت **`r highest_value_zone_total`**، ما يشير إلى استثمارات سكنية على نطاق أوسع.
+
+#### 2.4. **الأحياء ذات أعلى معدلات أسعار العقارات (ريال/م²)**
+
+تصدرت **`r top_rate_1`** القائمة بأعلى متوسط سعر بلغ **`r top_rate_1_value`** ريال/م²، بناءً على **`r top_rate_1_count`** صفقة ضمن منطقة المباني السكنية. تلتها كل من **`r top_rate_2`** و **`r top_rate_3`** بمتوسط **`r top_rate_2_value`** و **`r top_rate_3_value`** ريال/م²، من خلال **`r top_rate_2_count`** و **`r top_rate_3_count`** صفقة على التوالي.
+
+#### 2.5. **أحياء ذات طلب مرتفع وعرض منخفض**
+
+في فئة الطلب العالي والمعروض المحدود، جاء حي **`r high_demand_1`** في الصدارة، بمتوسط سعر **`r high_demand_1_rate`** ريال/م² عبر **`r high_demand_1_count`** صفقة. وتبعته الأحياء **`r high_demand_2`** و **`r high_demand_3`** بمعدلات **`r high_demand_2_rate`** و **`r high_demand_3_rate`** ريال/م² لكل منها، من خلال **`r high_demand_2_count`** و **`r high_demand_3_count`** صفقة على التوالي.
+
+#### 2.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+تشير التحليلات إلى أن مناطق **`r ddr_1`** تُعد الأكثر تطورًا، مع نسبة إشغال للأراضي تبلغ **`r ddr_1_value`**%. تلتها مناطق **`r ddr_2`** بنسبة **`r ddr_2_value`**% و **`r ddr_3`** بنسبة **`r ddr_3_value`**%، بينما سجلت مناطق **`r ddr_4`** أقل نسبة تطوير عند **`r ddr_4_value`**%.
+
+#### 2.7. **تحليل الشرائح السعرية – توزيع القدرة على الشراء**
+
+يكشف توزيع المعاملات عن ميل واضح نحو الفئات السعرية الأقل، حيث تهيمن فئة **أقل من 500,000 ريال** على **`r band_1_pct`**% من المعاملات، بإجمالي **`r band_1_count`** وحدة. تليها فئة **من 500 ألف إلى مليون ريال** بـ **`r band_2_count`** صفقة (**`r band_2_pct`**%)، بينما تمثل فئة **من مليون إلى مليوني ريال** نسبة **`r band_3_pct`**% من السوق، بعدد **`r band_3_count`** وحدة. وتشكل المعاملات التي تتجاوز **2 مليون ريال** نسبة **`r band_4_pct`**% بإجمالي **`r band_4_count`** صفقة.
+
+
+### REPORT-3
+#### 3.1. **أعلى معاملة في حي**
+
+جاء حي **`r highest_neighbourhood`** في الصدارة من حيث إجمالي الاستثمار، حيث تم تسجيل صفقة بارزة بتاريخ **`r highest_date`** بقيمة **`r highest_value`** ريال، بمعدل **`r highest_rate`** ريال/م² لمساحة قدرها **`r highest_area`** متر مربع. كما برزت مناطق **`r top_zones`** كمتنافسين من ذوي القيمة العالية.
+
+#### 3.2. **المناطق الأكثر نشاطًا حسب المعاملات (حسب الحي)**
+
+سجل حي **`r most_active_name`** أعلى عدد من المعاملات، متجاوزًا **`r most_active_count`** صفقة، مما يعكس مشاركة سوقية مستمرة ودورانًا قويًا للأصول.
+
+#### 3.3. **المناطق الأكثر نشاطًا حسب المعاملات (حسب نوع التقسيم)**
+
+مع **`r most_active_zone_count`** صفقة، برزت فئة **`r most_active_zone`** كالأكثر تداولًا، مما يشير إلى جاذبيتها للتطوير أو إعادة البيع. في المقابل، تصدرت **`r highest_value_zone_name`** من حيث إجمالي قيمة الصفقات، حيث بلغت **`r highest_value_zone_total`** ريال عبر **`r highest_value_zone_count`** صفقة، ما يدل على استثمارات سكنية عالية القيمة.
+
+#### 3.4. **الأحياء ذات أعلى معدلات الأسعار (ريال/م²)**
+
+سجل حي **`r top_rate_1`** أعلى معدل سعري على مستوى الدولة بمعدل **`r top_rate_1_value`** ريال/م²، بناءً على **`r top_rate_1_count`** معاملة ضمن قطاع المباني السكنية. تلاه كل من **`r top_rate_2`** (**`r top_rate_2_count`** صفقة) و**`r top_rate_3`** (**`r top_rate_3_count`** صفقة) بمعدلات **`r top_rate_2_value`** و**`r top_rate_3_value`** ريال/م² على التوالي.
+
+#### 3.5. **أحياء ذات طلب مرتفع وعرض منخفض**
+
+يبرز حي **`r high_demand_1`** كمنطقة ذات قيمة مرتفعة وعرض منخفض، بمعدل **`r high_demand_1_rate`** ريال/م² عبر **`r high_demand_1_count`** معاملة مسجلة. تليه **`r high_demand_2`** (**`r high_demand_2_count`** صفقة) و**`r high_demand_3`** (**`r high_demand_3_count`** صفقة) بمعدلات **`r high_demand_2_rate`** و**`r high_demand_3_rate`** ريال/م² على التوالي.
+
+#### 3.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+تشير البيانات إلى أن مناطق **`r ddr_1`** هي الأعلى من حيث نسبة التغطية المبنية، بنسبة **`r ddr_1_value`**% من مساحة الأرض. تليها مناطق **`r ddr_2`** و**`r ddr_3`** بنسبة **`r ddr_2_value`**% و**`r ddr_3_value`**% على التوالي، في حين سجلت مناطق **`r ddr_4`** أقل نسبة تطوير بنسبة **`r ddr_4_value`**%.
+
+#### 3.7. **تحليل الشرائح السعرية – توزيع القدرة على الشراء**
+
+يكشف تحليل الشرائح السعرية عن تركّز ملحوظ في فئة **أقل من 500,000 ريال**، والتي تشكّل أكثر من **`r band_1_pct`**% من جميع المعاملات، بما مجموعه **`r band_1_count`** عقار. تساهم فئة الأسعار المتوسطة **(500 ألف – مليون ريال)** بنسبة **`r band_2_pct`**% من خلال **`r band_2_count`** صفقة، بينما تمثل فئة **(1 مليون – 2 مليون ريال)** نسبة **`r band_3_pct`**% بعدد **`r band_3_count`** صفقة، وتستحوذ فئة **أكثر من 2 مليون ريال** على نسبة **`r band_4_pct`**% من السوق بإجمالي **`r band_4_count`** صفقة.
+
+
+### REPORT-4
+#### 4.1. **أعلى معاملة في حي**
+
+برز حي **`r highest_neighbourhood`** كأكثر الأحياء استثمارًا، حيث تم تنفيذ صفقة رئيسية بتاريخ **`r highest_date`** بقيمة إجمالية **`r highest_value`** ريال، بسعر **`r highest_rate`** ريال/م² لمساحة قدرها **`r highest_area`** متر مربع. وجاءت أحياء **`r top_zones`** في المراتب التالية من حيث حجم الاستثمار.
+
+#### 4.2. **المناطق الأكثر نشاطًا حسب المعاملات (حسب الحي)**
+
+بتسجيله أكثر من **`r most_active_count`** معاملة، يتصدر حي **`r most_active_name`** قائمة الأحياء من حيث النشاط، ما يدل على حركة سوقية قوية وطلب مستمر من المستثمرين.
+
+#### 4.3. **المناطق الأكثر نشاطًا حسب المعاملات (حسب نوع التقسيم)**
+
+تشير بيانات تقسيم المناطق إلى أن فئة **`r most_active_zone`** كانت الأكثر تداولًا، بعدد **`r most_active_zone_count`** معاملة، مما يعكس اهتمامًا متواصلاً بالأراضي الخام. وعلى النقيض، سجلت **`r highest_value_zone_name`** أعلى قيمة استثمارية بإجمالي **`r highest_value_zone_total`** ريال من خلال **`r highest_value_zone_count`** معاملة.
+
+#### 4.4. **الأحياء ذات أعلى معدلات الأسعار (ريال/م²)**
+
+سُجل أعلى معدل سعري للمباني السكنية في حي **`r top_rate_1`**، حيث بلغ المتوسط **`r top_rate_1_value`** ريال/م² عبر **`r top_rate_1_count`** صفقة. تلاه حي **`r top_rate_2`** بمتوسط **`r top_rate_2_value`** ريال/م² (**`r top_rate_2_count`** صفقة)، وحي **`r top_rate_3`** بمتوسط **`r top_rate_3_value`** ريال/م² (**`r top_rate_3_count`** صفقة).
+
+#### 4.5. **أحياء ذات طلب مرتفع وعرض منخفض**
+
+تصدّر حي **`r high_demand_1`** قائمة الأحياء ذات العرض المنخفض، حيث بلغ متوسط السعر فيه **`r high_demand_1_rate`** ريال/م² عبر **`r high_demand_1_count`** معاملة. تبعه حي **`r high_demand_2`** بمتوسط **`r high_demand_2_rate`** ريال/م² (**`r high_demand_2_count`** صفقة) وحي **`r high_demand_3`** بمتوسط **`r high_demand_3_rate`** ريال/م² (**`r high_demand_3_count`** صفقة).
+
+#### 4.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+أظهرت نتائج التقييم أن مناطق **`r ddr_1`** هي الأعلى من حيث نسبة التطوير، حيث بلغت **`r ddr_1_value`**% من مساحة الأرض. وتلتها مناطق **`r ddr_2`** بنسبة **`r ddr_2_value`**%، ثم **`r ddr_3`** بنسبة **`r ddr_3_value`**%، في حين سجلت مناطق **`r ddr_4`** أقل نسبة تطوير عند **`r ddr_4_value`**%.
+
+#### 4.7. **تحليل الشرائح السعرية – توزيع القدرة على الشراء**
+
+تُظهر البيانات أن القدرة على تحمل التكاليف لا تزال محركًا رئيسيًا؛ إذ تم تسجيل **`r band_1_count`** معاملة (**`r band_1_pct`**%) ضمن فئة الأسعار **أقل من 500 ألف ريال**. في حين سجلت فئة **500 ألف – 1 مليون ريال** عدد **`r band_2_count`** معاملة (**`r band_2_pct`**%)، تلتها فئة **1 – 2 مليون ريال** بـ **`r band_3_count`** معاملة (**`r band_3_pct`**%). وشهدت الفئة **أعلى من 2 مليون ريال** عدد **`r band_4_count`** معاملة، تمثل **`r band_4_pct`**% من الإجمالي.
+
+
+### REPORT-5
+#### 5.1. **أعلى معاملة في حي**
+
+في **`r highest_date`**، سجل حي **`r highest_neighbourhood`** أعلى صفقة عقارية من حيث القيمة، بقطعة أرض مساحتها **`r highest_area`** متر مربع، بسعر **`r highest_rate`**/متر مربع، ليبلغ إجمالي القيمة **`r highest_value`**. تلتها مناطق **`r top_zones`** كمناطق رئيسية لجذب الاستثمارات.
+
+#### 5.2. **المناطق الأكثر نشاطًا حسب المعاملات حسب الحي**
+
+تشير بيانات المعاملات إلى أن **`r most_active_name`** هي المنطقة الأكثر نشاطًا، بأكثر من **`r most_active_count`** صفقة، مما يدل على أنها منطقة ذات سيولة عالية.
+
+#### 5.3. **المناطق الأكثر نشاطًا حسب المعاملات حسب التصنيف**
+
+تصدرت **`r most_active_zone`** في عدد المعاملات (**`r most_active_zone_count`** صفقة)، مما يعكس تركيز المستثمرين على الأراضي الجاهزة للتطوير، بينما جذبت **`r highest_value_zone_name`**، رغم قلة الصفقات (**`r highest_value_zone_count`**) أكثر من **`r highest_value_zone_total`** ريال سعودي.
+
+#### 5.4. **الأحياء ذات أعلى أسعار للمتر المربع (ريال/م²)**
+
+تصدّر حي **`r top_rate_1`** السوق العقارية بمتوسط **`r top_rate_1_value`** ريال/م² من خلال **`r top_rate_1_count`** صفقة لبناءات سكنية. تلاه **`r top_rate_2`** بسعر **`r top_rate_2_value`** ريال/م² (**`r top_rate_2_count`** صفقة)، ثم **`r top_rate_3`** بسعر **`r top_rate_3_value`** ريال/م² (**`r top_rate_3_count`** صفقة).
+
+#### 5.5. **مناطق الطلب العالي والعرض المنخفض**
+
+برز حي **`r high_demand_1`** كمنطقة ذات طلب مرتفع ونشاط محدود، بمعدل سعر **`r high_demand_1_rate`** ريال/م² على **`r high_demand_1_count`** صفقة. كما سجل كل من **`r high_demand_2`** و **`r high_demand_3`** متوسطات قوية بلغت **`r high_demand_2_rate`** ريال/م² (**`r high_demand_2_count`** صفقة) و**`r high_demand_3_rate`** ريال/م² (**`r high_demand_3_count`** صفقة).
+
+#### 5.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+بناءً على مؤشرات DDR، جاءت منطقة **`r ddr_1`** في الصدارة بنسبة استخدام للأراضي بلغت **`r ddr_1_value`**٪، تلتها **`r ddr_2`** بنسبة **`r ddr_2_value`**٪، ثم **`r ddr_3`** بنسبة **`r ddr_3_value`**٪، وأخيرًا **`r ddr_4`** بنسبة **`r ddr_4_value`**٪.
+
+#### 5.7. **تحليل نطاق الأسعار – تقسيم حسب القدرة الشرائية**
+
+تشير البيانات إلى أن الإسكان الميسر **(أقل من 500 ألف ريال)** استحوذ على السوق بعدد **`r band_1_count`** صفقة، ما يمثل **`r band_1_pct`**٪ من إجمالي عدد المعاملات. تلاه النطاق **500 ألف – 1 مليون ريال** بنسبة **`r band_2_pct`**٪ (**`r band_2_count`** وحدة)، ثم **1 – 2 مليون ريال** بنسبة **`r band_3_pct`**٪ (**`r band_3_count`** وحدة)، وأخيرًا العقارات **أعلى من 2 مليون ريال** بنسبة **`r band_4_pct`**٪ (**`r band_4_count`** وحدة).
+
+
+### REPORT-6
+#### 6.1. **أعلى معاملة في حي**
+
+تمت صفقة بارزة في حي **`r highest_neighbourhood`** بتاريخ **`r highest_date`**، بقيمة بلغت **`r highest_value`** ريال، بسعر مميز قدره **`r highest_rate`** ريال/م² لمساحة **`r highest_area`** متر مربع—مما يدل على قوة الطلب. كما كانت **`r top_zones`** من أبرز وجهات الاستثمار.
+
+#### 6.2. **المناطق الأكثر نشاطًا حسب المعاملات (حسب الحي)**
+
+بتسجيلها أكثر من **`r most_active_count`** معاملة، يواصل حي **`r most_active_name`** إظهار نشاط عقاري قوي، مدعومًا بسيولة مرتفعة واهتمام مستمر من المشترين.
+
+#### 6.3. **المناطق الأكثر نشاطًا حسب المعاملات (حسب نوع التقسيم)**
+
+من حيث عدد المعاملات، تتصدر **`r most_active_zone`** المشهد بعدد **`r most_active_zone_count`** صفقة، مما يدل على شعبيتها في السوق. من ناحية أخرى، تقود **`r highest_value_zone_name`** القيمة الإجمالية، بإجمالي يتجاوز **`r highest_value_zone_total`** ريال عبر **`r highest_value_zone_count`** معاملة، ما يعكس اهتمامًا قويًا بالاستثمار السكني.
+
+#### 6.4. **الأحياء ذات أعلى معدلات الأسعار (ريال/م²)**
+
+بمعدل **`r top_rate_1_value`** ريال/م²، يتصدر حي **`r top_rate_1`** قائمة أسعار العقارات، استنادًا إلى **`r top_rate_1_count`** معاملة في المباني السكنية. ويليه كل من **`r top_rate_2`** و**`r top_rate_3`** بمعدلات **`r top_rate_2_value`** و**`r top_rate_3_value`** ريال/م²، عبر **`r top_rate_2_count`** و**`r top_rate_3_count`** معاملة على التوالي.
+
+#### 6.5. **أحياء ذات طلب مرتفع وعرض منخفض**
+
+في الأحياء ذات العرض المحدود، حقق حي **`r high_demand_1`** أعلى معدل سعر بلغ **`r high_demand_1_rate`** ريال/م²، من خلال **`r high_demand_1_count`** معاملة. تبعه كل من **`r high_demand_2`** و**`r high_demand_3`** بمعدلات **`r high_demand_2_rate`** و**`r high_demand_3_rate`** ريال/م²، مع **`r high_demand_2_count`** و**`r high_demand_3_count`** معاملة على التوالي.
+
+#### 6.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+أظهر التقييم أن مناطق **`r ddr_1`** تمتلك أعلى نسبة تطوير، حيث بلغت **`r ddr_1_value`**% من المساحة مبنية. تلتها مناطق **`r ddr_2`** بنسبة **`r ddr_2_value`**%، ثم **`r ddr_3`** بنسبة **`r ddr_3_value`**%، في حين سجلت **`r ddr_4`** أدنى نسبة استخدام عند **`r ddr_4_value`**%.
+
+#### 6.7. **تحليل الشرائح السعرية – توزيع القدرة على الشراء**
+
+يعكس مشهد المعاملات تركيزًا واضحًا على القدرة على تحمل التكاليف، إذ تم تسجيل **`r band_1_count`** معاملة (**`r band_1_pct`**%) لفئة العقارات **أقل من 500 ألف ريال**. تلتها الفئة **من 500 ألف إلى 1 مليون ريال** بعدد **`r band_2_count`** معاملة (**`r band_2_pct`**%)، ثم الفئة **من 1 إلى 2 مليون ريال** بـ **`r band_3_count`** معاملة (**`r band_3_pct`**%)، وأخيرًا فئة **أكثر من 2 مليون ريال** بـ **`r band_4_count`** معاملة تشكل **`r band_4_pct`**% من الإجمالي.
+
+
+### REPORT-7
+#### 7.1. **أعلى معاملة في حي**
+
+مع معاملة بارزة بلغت قيمتها **`r highest_value`** في **`r highest_date`**—استنادًا إلى مساحة **`r highest_area`** م² بسعر **`r highest_rate`** ريال/م²—تصدّر حي **`r highest_neighbourhood`** الأحياء من حيث إجمالي الاستثمارات. تبعت ذلك المناطق **`r top_zones`**.
+
+#### 7.2. **المناطق الأكثر نشاطًا حسب المعاملات حسب الحي**
+
+يتميز المشهد العقاري في **`r most_active_name`** بأكثر من **`r most_active_count`** صفقة، مما يرسّخ مكانتها كأكثر الأحياء نشاطًا ومركزًا لسيولة السوق.
+
+#### 7.3. **المناطق الأكثر نشاطًا حسب المعاملات حسب التصنيف**
+
+تواصل **`r most_active_zone`** تسجيل أعلى حجم من الصفقات (**`r most_active_zone_count`** صفقة)، مدفوعة على الأرجح بفرص تطوير الأراضي. في المقابل، تقود **`r highest_value_zone_name`** من حيث القيمة الإجمالية للمعاملات رغم عدد الصفقات الأقل (**`r highest_value_zone_count`**) والتي تجاوزت **`r highest_value_zone_total`**.
+
+#### 7.4. **الأحياء ذات أعلى أسعار العقارات (ريال/م²)**
+
+يتصدر **`r top_rate_1`** مناطق البناء السكنية بمتوسط سعر **`r top_rate_1_value`** ريال/م² من خلال **`r top_rate_1_count`** صفقة. يليه **`r top_rate_2`** بسعر **`r top_rate_2_value`** ريال/م² (**`r top_rate_2_count`** صفقة)، و**`r top_rate_3`** بسعر **`r top_rate_3_value`** ريال/م² (**`r top_rate_3_count`** صفقة).
+
+#### 7.5. **أحياء الطلب العالي والعرض المحدود**
+
+برز حي **`r high_demand_1`** كمنطقة ذات قيمة عالية مع عرض محدود، بسعر **`r high_demand_1_rate`** ريال/م² على **`r high_demand_1_count`** صفقة. كما تبعته **`r high_demand_2`** و**`r high_demand_3`** بمعدلات **`r high_demand_2_rate`** ريال/م² (**`r high_demand_2_count`** صفقة) و**`r high_demand_3_rate`** ريال/م² (**`r high_demand_3_count`** صفقة) على التوالي.
+
+#### 7.6. **نسبة كثافة التطوير حسب المنطقة (DDR)**
+
+تسجل مناطق **`r ddr_1`** أعلى كثافة تطوير بنسبة **`r ddr_1_value`**٪، تليها **`r ddr_2`** بنسبة **`r ddr_2_value`**٪ و**`r ddr_3`** بنسبة **`r ddr_3_value`**٪. بينما أظهرت **`r ddr_4`** أقل نسبة استخدام للأراضي بنسبة **`r ddr_4_value`**٪ فقط.
+
+#### 7.7. **تحليل نطاق الأسعار – تقسيم حسب القدرة على الشراء**
+
+تتصدر العقارات التي تقل أسعارها عن **500,000 ريال** السوق، إذ بلغت نسبتها **`r band_1_pct`**٪ من عدد الصفقات بإجمالي **`r band_1_count`** صفقة. تليها العقارات في نطاق **500 ألف – مليون ريال** بعدد **`r band_2_count`** صفقة (**`r band_2_pct`**٪)، ثم العقارات في نطاق **1–2 مليون ريال** بعدد **`r band_3_count`** صفقة (**`r band_3_pct`**٪)، وأخيرًا العقارات التي تفوق **2 مليون ريال** بنسبة **`r band_4_pct`**٪ (**`r band_4_count`** صفقة).
+
+
+### REPORT-8
+#### 8.1. **أعلى معاملة في حي**
+
+سجّل حي **`r highest_neighbourhood`** أعلى تدفقات لرأس المال بتاريخ **`r highest_date`**، من خلال صفقة واحدة بقيمة **`r highest_value`** ريال لعقار بمساحة **`r highest_area`** م²، بسعر **`r highest_rate`** ريال/م². كما شهدت **`r top_zones`** نشاطًا كبيرًا في السوق.
+
+#### 8.2. **المناطق الأكثر نشاطًا حسب المعاملات (حسب الحي)**
+
+يتصدر حي **`r most_active_name`** قائمة الأحياء من حيث عدد المعاملات، بتسجيله أكثر من **`r most_active_count`** صفقة، مما يعزز مكانته كلاعب رئيسي في حركة السوق.
+
+#### 8.3. **المناطق الأكثر نشاطًا حسب المعاملات (حسب نوع الاستخدام)**
+
+سجلت **`r most_active_zone`** أعلى عدد من المعاملات، بـ **`r most_active_zone_count`** صفقة، مما يشير إلى الطلب المستمر على الأراضي القابلة للتطوير. وفي المقابل، تصدرت **`r highest_value_zone_name`** من حيث القيمة الإجمالية، بتحقيق **`r highest_value_zone_total`** ريال من خلال **`r highest_value_zone_count`** معاملة.
+
+#### 8.4. **الأحياء ذات أعلى معدلات الأسعار (ريال/م²)**
+
+بمعدل **`r top_rate_1_value`** ريال/م²، جاء حي **`r top_rate_1`** في صدارة أسعار المباني السكنية، استنادًا إلى **`r top_rate_1_count`** معاملة. يليه كل من **`r top_rate_2`** و**`r top_rate_3`** بمعدلات **`r top_rate_2_value`** و**`r top_rate_3_value`** ريال/م² على التوالي.
+
+#### 8.5. **أحياء ذات طلب مرتفع وعرض منخفض**
+
+يقود حي **`r high_demand_1`** فئة الأحياء ذات الطلب المرتفع والعرض المحدود، بمعدل **`r high_demand_1_rate`** ريال/م² عبر **`r high_demand_1_count`** معاملة. تلاه كل من **`r high_demand_2`** و**`r high_demand_3`** بمعدلات **`r high_demand_2_rate`** و**`r high_demand_3_rate`** ريال/م²، استنادًا إلى **`r high_demand_2_count`** و**`r high_demand_3_count`** معاملة على التوالي.
+
+#### 8.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+تهيمن مناطق **`r ddr_1`** على أعلى نسب التغطية العمرانية، بمعدل **`r ddr_1_value`**% من استخدام الأرض. تليها **`r ddr_2`** بنسبة **`r ddr_2_value`**% و**`r ddr_3`** بنسبة **`r ddr_3_value`**%، في حين سجّلت **`r ddr_4`** أقل نسبة عند **`r ddr_4_value`**%.
+
+#### 8.7. **تحليل الشرائح السعرية – توزيع القدرة على الشراء**
+
+يشير توزيع المعاملات إلى تركيز السوق على الفئات السعرية الميسورة، حيث تم بيع **`r band_1_count`** عقارًا (**`r band_1_pct`**%) ضمن شريحة **أقل من 500 ألف ريال**. كما سجلت فئة **500 ألف إلى مليون ريال** عدد **`r band_2_count`** صفقة (**`r band_2_pct`**%)، تلتها فئة **مليون إلى مليونين ريال** بـ **`r band_3_count`** صفقة (**`r band_3_pct`**%)، وأخيرًا فئة **أعلى من 2 مليون ريال** بـ **`r band_4_count`** صفقة (**`r band_4_pct`**%).
+
+
+### REPORT-9
+
+#### 9.1. **أعلى معاملة في حي**
+
+في **`r highest_date`**، سجل حي **`r highest_neighbourhood`** صفقة عقارية عالية القيمة بلغت **`r highest_value`**، ناتجة عن قطعة أرض بمساحة **`r highest_area`** متر مربع بسعر **`r highest_rate`** ريال/م²—ما جعله الحي الأعلى من حيث قيمة المعاملات. تبعته مناطق **`r top_zones`**.
+
+#### 9.2. **المناطق الأكثر نشاطًا حسب المعاملات حسب الحي**
+
+بتسجيلها أكثر من **`r most_active_count`** صفقة، تتصدر **`r most_active_name`** نشاط الأحياء العقارية، مما يعكس استمرار الطلب وزخم الاستثمار في المنطقة.
+
+#### 9.3. **المناطق الأكثر نشاطًا حسب المعاملات حسب التصنيف**
+
+أكثر أنواع التصنيفات نشاطًا من حيث حجم المعاملات هو **`r most_active_zone`**، بعدد **`r most_active_zone_count`** صفقة، مما يدل على تفضيل المستثمرين للاستثمار في الأراضي. أما **`r highest_value_zone_name`**، فعلى الرغم من عدد الصفقات الأقل (**`r highest_value_zone_count`**)، فقد تصدرت من حيث إجمالي القيمة بأكثر من **`r highest_value_zone_total`**.
+
+#### 9.4. **الأحياء ذات أعلى معدلات العقارات (ريال/م²)**
+
+حقق **`r top_rate_1`** أعلى متوسط سعر للمتر المربع بقيمة **`r top_rate_1_value`** ريال/م² عبر **`r top_rate_1_count`** صفقة سكنية. تلاه **`r top_rate_2`** بسعر **`r top_rate_2_value`** ريال/م² (**`r top_rate_2_count`** صفقة)، و**`r top_rate_3`** بسعر **`r top_rate_3_value`** ريال/م² (**`r top_rate_3_count`** صفقة).
+
+#### 9.5. **أحياء الطلب العالي والعرض المحدود**
+
+من بين الأحياء ذات حجم معاملات محدود ولكن بأسعار مرتفعة، جاء **`r high_demand_1`** في المقدمة، بمتوسط سعر **`r high_demand_1_rate`** ريال/م² من خلال **`r high_demand_1_count`** صفقة. تلاه **`r high_demand_2`** بمعدل **`r high_demand_2_rate`** ريال/م² (**`r high_demand_2_count`** صفقة) و**`r high_demand_3`** بمعدل **`r high_demand_3_rate`** ريال/م² (**`r high_demand_3_count`** صفقة).
+
+#### 9.6. **نسبة كثافة التطوير حسب المنطقة (DDR)**
+
+أظهرت الدراسة أن مناطق **`r ddr_1`** سجلت أعلى نسبة كثافة تطوير بنسبة **`r ddr_1_value`**٪، تليها **`r ddr_2`** بنسبة **`r ddr_2_value`**٪ و**`r ddr_3`** بنسبة **`r ddr_3_value`**٪. بينما سجلت مناطق **`r ddr_4`** أدنى استخدام للأراضي بنسبة **`r ddr_4_value`**٪ فقط.
+
+#### 9.7. **تحليل نطاق الأسعار – تجزئة القدرة الشرائية**
+
+تشير البيانات إلى أن أكثر من **`r band_1_pct`**٪ من الصفقات (**`r band_1_count`** وحدة) كانت لعقارات تقل أسعارها عن **500,000 ريال**، مما يدل على تفضيل ملحوظ للعقارات الاقتصادية. كما سُجلت **`r band_2_count`** صفقة ضمن الفئة السعرية **500 ألف – مليون ريال** (**`r band_2_pct`**٪)، ثم **`r band_3_count`** وحدة في فئة **1–2 مليون ريال** (**`r band_3_pct`**٪)، وأخيرًا **`r band_4_count`** صفقة ضمن العقارات التي تتجاوز **2 مليون ريال** (**`r band_4_pct`**٪).
+
+
+### REPORT-10
+#### 10.1. **أعلى معاملة في حي**
+
+تصدّر **`r highest_neighbourhood`** السوق في **`r highest_date`**، من خلال معاملة بلغت قيمتها **`r highest_value`**، لعقار بمساحة **`r highest_area`** متر مربع، وبسعر **`r highest_rate`** لكل متر مربع—مما يشير إلى اهتمام كبار المستثمرين. كما شهدت **`r top_zones`** أداءً استثماريًا قويًا.
+
+#### 10.2. **المناطق الأكثر نشاطًا حسب المعاملات لكل حي**
+
+مع تجاوز عدد معاملاتها **`r most_active_count`**، تواصل **`r most_active_name`** تصدر السوق من حيث النشاط، مما يعكس سيولة عالية وطلبًا مستمرًا.
+
+#### 10.3. **المناطق الأكثر نشاطًا حسب المعاملات حسب تصنيف الاستخدام**
+
+بينما سجلت **`r most_active_zone`** أكبر عدد من المعاملات (**`r most_active_zone_count`**)، مدفوعة بالطلب على التطوير أو إعادة البيع، فإن **`r highest_value_zone_name`** تفوقت من حيث القيمة، بمجموع تجاوز **`r highest_value_zone_total`** عبر **`r highest_value_zone_count`** صفقة.
+
+#### 10.4. **الأحياء ذات أعلى معدلات الأسعار (ريال/متر مربع)**
+
+وفقًا لبيانات المعاملات، تصدرت **`r top_rate_1`** الأحياء بمعدل **`r top_rate_1_value`** ريال/م² من خلال **`r top_rate_1_count`** معاملة. تلتها **`r top_rate_2`** و**`r top_rate_3`** بمعدل **`r top_rate_2_value`** و**`r top_rate_3_value`** ريال/م² من خلال **`r top_rate_2_count`** و**`r top_rate_3_count`** معاملة على التوالي.
+
+#### 10.5. **مناطق ذات طلب مرتفع وعرض منخفض**
+
+سجلت **`r high_demand_1`** أعلى معدل سعر بواقع **`r high_demand_1_rate`** ريال/م² من خلال **`r high_demand_1_count`** معاملة، مما يجعلها في مقدمة المناطق ذات الطلب المرتفع والعرض المحدود. تلتها **`r high_demand_2`** و**`r high_demand_3`** بمعدلات **`r high_demand_2_rate`** و**`r high_demand_3_rate`** ريال/م² عبر **`r high_demand_2_count`** و**`r high_demand_3_count`** معاملات على التوالي.
+
+#### 10.6. **نسبة كثافة التطوير حسب المنطقة (DDR)**
+
+يُظهر التحليل المكاني أن مناطق **`r ddr_1`** هي الأعلى من حيث كثافة التطوير بنسبة **`r ddr_1_value`**٪، تليها **`r ddr_2`** بنسبة **`r ddr_2_value`**٪، و**`r ddr_3`** بنسبة **`r ddr_3_value`**٪. بينما سجلت **`r ddr_4`** أدنى نسبة استخدام للأرض عند **`r ddr_4_value`**٪.
+
+#### 10.7. **تحليل نطاقات الأسعار – تقسيم القدرة على الشراء**
+
+تركزت معظم المعاملات (**`r band_1_count`** وحدة، بنسبة تزيد عن **`r band_1_pct`**٪) ضمن نطاق أقل من 500 ألف ريال. وساهم النطاق التالي (500 ألف – 1 مليون ريال) بـ **`r band_2_pct`**٪ من خلال **`r band_2_count`** وحدة، في حين سجلت معاملات النطاق (1 – 2 مليون ريال) نسبة **`r band_3_pct`**٪ (**`r band_3_count`**) وتجاوزت معاملات أكثر من 2 مليون ريال نسبة **`r band_4_pct`**٪ بعدد **`r band_4_count`** صفقة.
+
+
+### REPORT-11
+#### 11.1. **أعلى معاملة في حي**
+
+حدثت المعاملة التي وضعت المعيار في **`r highest_neighbourhood`** بتاريخ **`r highest_date`**، بقيمة **`r highest_value`** لقطعة أرض بمساحة **`r highest_area`** متر مربع، وبسعر **`r highest_rate`** ريال/م². كما كانت أحياء **`r top_zones`** من بين المناطق الرائدة في الاستثمار.
+
+#### 11.2. **المناطق الأكثر نشاطًا حسب المعاملات حسب الحي**
+
+يُعد **`r most_active_name`** الحي الأكثر نشاطًا من حيث عدد المعاملات، بتسجيله أكثر من **`r most_active_count`** صفقة عقارية، ما يعكس حيوية السوق وسرعة حركته.
+
+#### 11.3. **المناطق الأكثر نشاطًا حسب المعاملات حسب التصنيف**
+
+تشير اتجاهات المعاملات إلى أن **`r most_active_zone`** هو التصنيف الأكثر نشاطًا من حيث الحجم، بإجمالي **`r most_active_zone_count`** صفقة، ما يدل على ارتفاع الطلب على الأراضي. في المقابل، ورغم عدد الصفقات الأقل (**`r highest_value_zone_count`**)، حقق **`r highest_value_zone_name`** أعلى قيمة إجمالية تجاوزت **`r highest_value_zone_total`**.
+
+#### 11.4. **الأحياء ذات أعلى معدلات الممتلكات (ريال/م²)**
+
+يتصدر **`r top_rate_1`** قائمة الأحياء من حيث متوسط السعر بواقع **`r top_rate_1_value`** ريال/م² عبر **`r top_rate_1_count`** صفقة. يليه **`r top_rate_2`** بسعر **`r top_rate_2_value`** ريال/م² (**`r top_rate_2_count`** صفقة) ثم **`r top_rate_3`** بسعر **`r top_rate_3_value`** ريال/م² (**`r top_rate_3_count`** صفقة).
+
+#### 11.5. **أحياء الطلب العالي والعرض المحدود**
+
+تتصدر **`r high_demand_1`** المناطق ذات الطلب العالي والعرض المحدود، بمعدل **`r high_demand_1_rate`** ريال/م² من خلال **`r high_demand_1_count`** صفقة. تليها **`r high_demand_2`** بـ **`r high_demand_2_count`** صفقة بسعر **`r high_demand_2_rate`** ريال/م²، ثم **`r high_demand_3`** بـ **`r high_demand_3_count`** صفقة بسعر **`r high_demand_3_rate`** ريال/م².
+
+#### 11.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+تأتي مناطق **`r ddr_1`** في المقدمة من حيث كثافة التطوير بنسبة **`r ddr_1_value`**٪ من استخدام الأرض، تليها **`r ddr_2`** بنسبة **`r ddr_2_value`**٪ و**`r ddr_3`** بنسبة **`r ddr_3_value`**٪. أما مناطق **`r ddr_4`** فقد سجلت أدنى استخدام للأرض بنسبة **`r ddr_4_value`**٪ فقط.
+
+#### 11.7. **تحليل نطاق الأسعار – تجزئة القدرة الشرائية**
+
+يستمر السكن الميسور في الهيمنة، حيث سُجلت **`r band_1_count`** صفقة لعقارات تقل عن 500 ألف ريال، ما يمثل أكثر من **`r band_1_pct`**٪ من حجم السوق. تليها الفئة من 500 ألف إلى مليون ريال بنسبة **`r band_2_pct`**٪ (**`r band_2_count`** صفقة)، ثم الفئة من مليون إلى مليونين ريال بنسبة **`r band_3_pct`**٪ (**`r band_3_count`** صفقة)، وأخيرًا العقارات فوق مليونين ريال بنسبة **`r band_4_pct`**٪ (**`r band_4_count`** صفقة).
+
+### REPORT-12
+#### 12.1. **أعلى معاملة في حي**
+
+استحوذ حي **`r highest_neighbourhood`** على اهتمام المستثمرين من خلال صفقة عالية القيمة بتاريخ **`r highest_date`**، حيث تم شراء عقار بمساحة **`r highest_area`** متر مربع بسعر **`r highest_rate`** ريال/م²، ليبلغ إجمالي الصفقة **`r highest_value`**. وبهذا تصدّر الحي تصنيفات الاستثمار متفوقًا على أحياء **`r top_zones`**.
+
+#### 12.2. **المناطق الأكثر نشاطًا حسب المعاملات حسب الحي**
+
+تم تسجيل أعلى نشاط في المعاملات العقارية في حي **`r most_active_name`**، بأكثر من **`r most_active_count`** صفقة، مما يجعله نقطة تركيز رئيسية في السوق العقارية.
+
+#### 12.3. **المناطق الأكثر نشاطًا حسب المعاملات حسب التصنيف**
+
+في تحليل التصنيف العقاري، تصدّر تصنيف **`r most_active_zone`** من حيث عدد المعاملات بإجمالي **`r most_active_zone_count`** صفقة. وعلى الرغم من عدد الصفقات الأقل (**`r highest_value_zone_count`**) فقد تصدّر **`r highest_value_zone_name`** بقيمة معاملات إجمالية تجاوزت **`r highest_value_zone_total`**.
+
+#### 12.4. **الأحياء ذات أعلى معدلات الممتلكات (ريال/م²)**
+
+يبرز حي **`r top_rate_1`** بأعلى متوسط سعر للمتر المربع بقيمة **`r top_rate_1_value`** ريال عبر **`r top_rate_1_count`** صفقة في فئة البناء السكني، يليه **`r top_rate_2`** بسعر **`r top_rate_2_value`** ريال (**`r top_rate_2_count`** صفقة)، ثم **`r top_rate_3`** بسعر **`r top_rate_3_value`** ريال (**`r top_rate_3_count`** صفقة).
+
+#### 12.5. **أحياء ذات طلب مرتفع وعرض منخفض**
+
+في شريحة الأحياء ذات العرض المحدود، يتصدر **`r high_demand_1`** القائمة بمعدل سعر استثنائي بلغ **`r high_demand_1_rate`** ريال/م² من خلال **`r high_demand_1_count`** صفقة. تليه **`r high_demand_2`** بمعدل **`r high_demand_2_rate`** ريال/م² عبر **`r high_demand_2_count`** صفقة، و**`r high_demand_3`** بمعدل **`r high_demand_3_rate`** ريال/م² عبر **`r high_demand_3_count`** صفقة.
+
+#### 12.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+تُظهر مقارنة كثافة التطوير أن مناطق **`r ddr_1`** سجلت أعلى نسبة استخدام للأراضي بنسبة **`r ddr_1_value`**٪، تليها **`r ddr_2`** بنسبة **`r ddr_2_value`**٪، و**`r ddr_3`** بنسبة **`r ddr_3_value`**٪. أما **`r ddr_4`** فسجلت أقل نسبة تطوير عند **`r ddr_4_value`**٪.
+
+#### 12.7. **تحليل نطاق الأسعار – تجزئة القدرة على الشراء**
+
+تُظهر البيانات أن العقارات ذات الأسعار المنخفضة (أقل من 500,000 ريال) تُشكل الجزء الأكبر من السوق، مع **`r band_1_count`** صفقة تمثل أكثر من **`r band_1_pct`**٪ من حجم السوق. وتأتي الفئتان **SAR 500K–1M** و**SAR 1M–2M** بعد ذلك بنسبة **`r band_2_pct`**٪ (**`r band_2_count`** صفقة) و**`r band_3_pct`**٪ (**`r band_3_count`** صفقة) على التوالي، في حين سجلت الفئة الفاخرة (أعلى من 2 مليون ريال) **`r band_4_count`** صفقة بنسبة **`r band_4_pct`**٪.
+
+
+### REPORT-13
+#### 13.1. **أعلى معاملة في حي**
+
+شهد حي **`r highest_neighbourhood`** معاملة مميزة في تاريخ **`r highest_date`**، بلغت قيمتها **`r highest_value`** بسعر **`r highest_rate`** ريال/م² لمساحة قدرها **`r highest_area`** م²، مما جعله الحي الأعلى أداءً. كما سجلت **`r top_zones`** أحجام استثمار ملحوظة.
+
+#### 13.2. **المناطق الأكثر نشاطًا حسب المعاملات حسب الحي**
+
+بتسجيل أكثر من **`r most_active_count`** معاملة، يتصدر **`r most_active_name`** جميع الأحياء من حيث عدد الصفقات، مما يدل على جاذبيته واستقراره في السوق.
+
+#### 13.3. **المناطق الأكثر نشاطًا حسب المعاملات حسب التصنيف**
+
+سجلت **`r most_active_zone`** أكبر عدد من المعاملات (**`r most_active_zone_count`**)، مما يعكس نشاطًا واسع النطاق في السوق. في المقابل، سجلت **`r highest_value_zone_name`** أعلى قيمة إجمالية للصفقات بمقدار **`r highest_value_zone_total`** من خلال **`r highest_value_zone_count`** معاملة فقط.
+
+#### 13.4. **الأحياء ذات أعلى معدلات الأسعار (ريال/م²)**
+
+ضمن معاملات المباني السكنية، تصدرت **`r top_rate_1`** الأحياء بمتوسط ​​**`r top_rate_1_value`** ريال/م² استنادًا إلى **`r top_rate_1_count`** معاملة. تلتها **`r top_rate_2`** و**`r top_rate_3`** بمعدلات **`r top_rate_2_value`** و**`r top_rate_3_value`** ريال/م².
+
+#### 13.5. **المناطق ذات الطلب المرتفع والعرض المنخفض**
+
+برزت **`r high_demand_1`** في فئة الطلب المرتفع والعرض المحدود، محققة معدل **`r high_demand_1_rate`** ريال/م² من خلال **`r high_demand_1_count`** معاملة. وتلتها **`r high_demand_2`** بمعدل **`r high_demand_2_rate`** (**`r high_demand_2_count`** معاملة) و**`r high_demand_3`** بمعدل **`r high_demand_3_rate`** (**`r high_demand_3_count`** معاملة).
+
+#### 13.6. **نسبة كثافة التطوير حسب المنطقة (DDR)**
+
+تُظهر بيانات استغلال الأراضي أن مناطق **`r ddr_1`** هي الأعلى من حيث كثافة التطوير بنسبة **`r ddr_1_value`**٪، تليها **`r ddr_2`** بنسبة **`r ddr_2_value`**٪ و**`r ddr_3`** بنسبة **`r ddr_3_value`**٪. بينما جاءت **`r ddr_4`** في المرتبة الأخيرة بنسبة **`r ddr_4_value`**٪.
+
+#### 13.7. **تحليل نطاق الأسعار – تقسيم القدرة على الشراء**
+
+تتركز النسبة الأكبر من مبيعات العقارات في فئة **أقل من 500 ألف ريال**، حيث بلغت **`r band_1_count`** وحدة (**`r band_1_pct`**٪). بينما سجلت فئة **500 ألف – 1 مليون ريال** **`r band_2_count`** معاملة (**`r band_2_pct`**٪)، وتبعتها فئة **1 – 2 مليون ريال** بـ **`r band_3_count`** معاملة (**`r band_3_pct`**٪)، وفئة **أكثر من 2 مليون ريال** بـ **`r band_4_count`** معاملة (**`r band_4_pct`**٪).
+
+
+### REPORT-14
+#### 14.1. **أعلى معاملة في حي**
+
+في تاريخ **`r highest_date`**، تم تسجيل صفقة عقارية بارزة في حي **`r highest_neighbourhood`** بلغت **`r highest_value`** لعقار بمساحة **`r highest_area`** متر مربع بسعر **`r highest_rate`** ريال/م²، مما يعكس اهتمامًا متزايدًا بالسوق. تلتها أحياء **`r top_zones`** من حيث حجم الاستثمارات.
+
+#### 14.2. **المناطق الأكثر نشاطًا حسب المعاملات حسب الحي**
+
+شهد حي **`r most_active_name`** أكثر من **`r most_active_count`** معاملة، مما عزز مكانته كأكثر الأحياء سيولة ونشاطًا في السوق الحالية.
+
+#### 14.3. **المناطق الأكثر نشاطًا حسب المعاملات حسب التصنيف**
+
+تشير البيانات إلى أن تصنيف **`r most_active_zone`** هو الأكثر نشاطًا من حيث عدد المعاملات (**`r most_active_zone_count`** صفقة)، مما يعكس شعبيته بين المستثمرين والمطورين. وعلى الرغم من قلة المعاملات في **`r highest_value_zone_name`** (**`r highest_value_zone_count`** صفقة)، إلا أنه تصدّر من حيث القيمة الإجمالية للصفقات والتي تجاوزت **`r highest_value_zone_total`**.
+
+#### 14.4. **الأحياء ذات أعلى معدلات الأسعار (ريال/م²)**
+
+سجّل حي **`r top_rate_1`** أعلى متوسط سعر للمتر المربع بقيمة **`r top_rate_1_value`** ريال في فئة البناء السكني، عبر **`r top_rate_1_count`** صفقة. تلاه حي **`r top_rate_2`** بسعر **`r top_rate_2_value`** ريال (**`r top_rate_2_count`** صفقة)، ثم **`r top_rate_3`** بسعر **`r top_rate_3_value`** ريال (**`r top_rate_3_count`** صفقة).
+
+#### 14.5. **أحياء ذات طلب مرتفع وعرض منخفض**
+
+في الأحياء ذات المبيعات المحدودة والأسعار المرتفعة، تصدّر **`r high_demand_1`** بمعدل **`r high_demand_1_rate`** ريال/م² من صفقة واحدة. تلاه **`r high_demand_2`** و**`r high_demand_3`** بمعدلات **`r high_demand_2_rate`** و**`r high_demand_3_rate`** ريال/م² لكل منهما.
+
+#### 14.6. **نسبة كثافة التطوير (DDR) حسب المنطقة**
+
+تُعد مناطق **`r ddr_1`** الأعلى من حيث نسبة استغلال الأراضي، محققة **`r ddr_1_value`**٪، تليها مناطق **`r ddr_2`** بنسبة **`r ddr_2_value`**٪ و**`r ddr_3`** بنسبة **`r ddr_3_value`**٪. أما مناطق **`r ddr_4`** فسجلت أدنى نسبة تطوير عند **`r ddr_4_value`**٪.
+
+#### 14.7. **تحليل نطاق الأسعار – تجزئة القدرة على الشراء**
+
+تتركز معظم مبيعات العقارات في الشريحة الميسورة (أقل من 500,000 ريال)، بعدد **`r band_1_count`** صفقة تمثل أكثر من **`r band_1_pct`**٪ من السوق. وسجلت الشريحتان **SAR 500K–1M** و**SAR 1M–2M** نسبًا بلغت **`r band_2_pct`**٪ (**`r band_2_count`**) و**`r band_3_pct`**٪ (**`r band_3_count`**) على التوالي، بينما حققت العقارات الفاخرة (أعلى من 2 مليون ريال) **`r band_4_count`** صفقة بنسبة **`r band_4_pct`**٪.
+
+
+### REPORT-15
+
+### REPORT-16
+
+### REPORT-17
+
+### REPORT-18
+
+### REPORT-19
+
+### REPORT-20
+
+# Unit Transactions
+  
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+library(dplyr)
+library(scales)
+library(openxlsx)
+library(lubridate)
+library(stringr)
+library(DT)
+# Load and clean data once
+df <- read.xlsx("~/7.Narration/8.Property unit reports/Input/unit_transactions_1750066298503.xlsx")
+datatable(
+  df,
+  options = list(
+    pageLength = 10,         
+    scrollX = TRUE           
+  )
+)
+df <- read.xlsx("~/7.Narration/8.Property unit reports/Input/unit_transactions_1750066298503.xlsx") %>%
+  filter(OUTLIER == "No") %>%
+  mutate(
+    VALUE = as.numeric(`VALUE.(SAR)`),
+    AREA = as.numeric(`UNIT.AREA.(sqm)`),
+    RATE = as.numeric(`TRANSACTION.RATE.(SAR/sqm)`),
+    DATE = as.Date(`TRANSACTION.DATE`),
+    NEIGHBORHOOD = str_to_title(NEIGHBORHOOD),
+    ZONE = str_to_title(ZONE)
+  ) %>%
+  filter(!is.na(VALUE), !is.na(AREA), !is.na(RATE), !is.na(DATE), !is.na(NEIGHBORHOOD), !is.na(ZONE))
+
+#--------------- Point 1: High-Value Transactions
+# Get top 2 high-value transactions
+top_tx_hv <- df %>% arrange(desc(VALUE)) %>% slice(1:2)
+
+# Format values for sentence
+hv_n1 <- top_tx_hv$NEIGHBORHOOD[1]
+hv_a1 <- paste0(formatC(top_tx_hv$AREA[1], format = "f", digits = 0), " sqm")
+hv_v1 <- dollar(top_tx_hv$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+hv_r1 <- formatC(top_tx_hv$RATE[1], format = "f", digits = 0, big.mark = ",")
+hv_d1 <- format(top_tx_hv$DATE[1], "%B %d, %Y")
+
+hv_n2 <- top_tx_hv$NEIGHBORHOOD[2]
+hv_a2 <- paste0(formatC(top_tx_hv$AREA[2], format = "f", digits = 0), " sqm")
+hv_v2 <- dollar(top_tx_hv$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+hv_r2 <- formatC(top_tx_hv$RATE[2], format = "f", digits = 0, big.mark = ",")
+hv_d2 <- format(top_tx_hv$DATE[2], "%B %d, %Y")
+
+#--------------- Point 2: Premium Pricing by Neighborhood
+# Average rate per neighborhood
+rate_by_neigh_p <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(avg_rate = mean(RATE, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(avg_rate))
+
+# Top 3 premium neighborhoods
+top3_p <- rate_by_neigh_p %>% slice(1:3)
+# One affordable neighborhood
+low1_p <- rate_by_neigh_p %>% slice_tail(n = 1)
+
+# Format values (round to nearest hundred)
+p_n1 <- top3_p$NEIGHBORHOOD[1]
+p_r1 <- paste0("SAR ", formatC(round(top3_p$avg_rate[1], -2), format = "f", digits = 0, big.mark = ","))
+p_n2 <- top3_p$NEIGHBORHOOD[2]
+p_r2 <- paste0("SAR ", formatC(round(top3_p$avg_rate[2], -2), format = "f", digits = 0, big.mark = ","))
+p_n3 <- top3_p$NEIGHBORHOOD[3]
+p_r3 <- paste0("SAR ", formatC(round(top3_p$avg_rate[3], -2), format = "f", digits = 0, big.mark = ","))
+p_nl <- low1_p$NEIGHBORHOOD
+p_rl <- paste0("SAR ", formatC(round(low1_p$avg_rate, -2), format = "f", digits = 0, big.mark = ","))
+
+#--------------- Point 3: High-Demand Neighborhoods
+# Count transactions per neighborhood
+txn_counts_d <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  arrange(desc(count))
+
+# Get top 3 neighborhoods
+top3_d <- txn_counts_d %>% slice(1:3)
+
+# Extract values and round counts
+d_n1 <- top3_d$NEIGHBORHOOD[1]
+d_c1 <- round(top3_d$count[1], -1)  # nearest 10
+d_n2 <- top3_d$NEIGHBORHOOD[2]
+d_c2 <- round(top3_d$count[2], -1)
+d_n3 <- top3_d$NEIGHBORHOOD[3]
+d_c3 <- round(top3_d$count[3], -1)
+
+#--------------- Point 4: Property Type Trends
+# Function to get zone-level top neighborhood and rate summary (with filtering)
+get_zone_summary <- function(zone_name) {
+  zone_df <- df %>%
+    filter(ZONE == zone_name, !is.na(RATE), !is.na(NEIGHBORHOOD), NEIGHBORHOOD != "UNKNOWN")
+  
+  if (nrow(zone_df) < 5) {
+    return(NULL)
+  }
+  
+  top_neigh <- zone_df %>%
+    group_by(NEIGHBORHOOD) %>%
+    summarise(n = n(), avg_rate = mean(RATE, na.rm = TRUE), .groups = "drop") %>%
+    arrange(desc(n)) %>%
+    slice(1) %>%
+    pull(NEIGHBORHOOD)
+  
+  stats <- zone_df %>%
+    filter(NEIGHBORHOOD == top_neigh) %>%
+    summarise(
+      min_rate = min(RATE, na.rm = TRUE),
+      max_rate = max(RATE, na.rm = TRUE),
+      avg_rate = mean(RATE, na.rm = TRUE)
+    )
+  
+  if (is.na(stats$min_rate) | is.na(stats$max_rate) | is.na(stats$avg_rate)) {
+    return(NULL)
+  }
+  
+  list(
+    neighborhood = top_neigh,
+    min_rate = round(stats$min_rate),
+    max_rate = round(stats$max_rate),
+    avg_rate = round(stats$avg_rate)
+  )
+}
+
+# Get summaries (using correct zone names)
+res_building_t <- get_zone_summary("Residential Building")
+villa_t <- get_zone_summary("Single Family Villa")
+res_commercial_t <- get_zone_summary("Residential Commercial")
+
+#--------------- Point 5: Pricing Segmentation
+# Get max/min rate by neighborhood
+rate_by_neigh_s <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(
+    max_rate = max(RATE, na.rm = TRUE),
+    min_rate = min(RATE, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(max_rate))
+
+# Get top 2 luxury and 2 affordable neighborhoods
+luxury_s <- rate_by_neigh_s %>% slice(1:2)
+affordable_s <- rate_by_neigh_s %>% arrange(max_rate) %>% slice(1:2)
+
+# Format values
+s_lux1 <- luxury_s$NEIGHBORHOOD[1]
+s_lux2 <- luxury_s$NEIGHBORHOOD[2]
+s_lux_max <- paste0("SAR ", formatC(round(max(luxury_s$max_rate), -2), format = "f", digits = 0, big.mark = ","))
+s_aff1 <- affordable_s$NEIGHBORHOOD[1]
+s_aff2 <- affordable_s$NEIGHBORHOOD[2]
+s_aff_min <- paste0("SAR ", formatC(round(min(affordable_s$min_rate), -2), format = "f", digits = 0, big.mark = ","))
+s_aff_max <- paste0("SAR ", formatC(round(max(affordable_s$max_rate), -2), format = "f", digits = 0, big.mark = ","))
+
+#--------------- Point 6: Largest Plot Deals
+# Get top 2 largest unit area transactions
+top_large_plots_l <- df %>%
+  arrange(desc(AREA)) %>%
+  slice(1:2)
+
+# Extract and format data
+l_n1 <- top_large_plots_l$NEIGHBORHOOD[1]
+l_v1 <- dollar(top_large_plots_l$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+l_a1 <- paste0(formatC(top_large_plots_l$AREA[1], format = "f", digits = 0), " sqm")
+l_r1 <- paste0("SAR ", formatC(round(top_large_plots_l$RATE[1], 0), big.mark = ","))
+l_d1 <- format(top_large_plots_l$DATE[1], "%B %d, %Y")
+
+l_n2 <- top_large_plots_l$NEIGHBORHOOD[2]
+l_v2 <- dollar(top_large_plots_l$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+l_a2 <- paste0(formatC(top_large_plots_l$AREA[2], format = "f", digits = 0), " sqm")
+l_r2 <- paste0("SAR ", formatC(round(top_large_plots_l$RATE[2], 0), big.mark = ","))
+l_d2 <- format(top_large_plots_l$DATE[2], "%B %d, %Y")
+
+
+#--------------- Point 7: Top Land Transactions by Value
+# Top 2 transactions by value
+top_tx_t <- df %>%
+  arrange(desc(VALUE)) %>%
+  slice(1:2)
+
+# Extract and format first transaction
+t_n1 <- top_tx_t$NEIGHBORHOOD[1]
+t_d1 <- format(top_tx_t$DATE[1], "%B %d, %Y")
+t_v1 <- dollar(top_tx_t$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+t_a1 <- paste0(formatC(top_tx_t$AREA[1], format = "f", digits = 0, big.mark = ","), " sqm")
+t_r1 <- paste0("SAR ", formatC(round(top_tx_t$RATE[1], 0), format = "f", big.mark = ","))
+
+# Extract and format second transaction
+t_n2 <- top_tx_t$NEIGHBORHOOD[2]
+t_d2 <- format(top_tx_t$DATE[2], "%B %d, %Y")
+t_v2 <- dollar(top_tx_t$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+t_a2 <- paste0(formatC(top_tx_t$AREA[2], format = "f", digits = 0, big.mark = ","), " sqm")
+t_r2 <- paste0("SAR ", formatC(round(top_tx_t$RATE[2], 0), format = "f", big.mark = ","))
+
+
+#--------------- Point 8: Top zone Transactions by Value (Zone-level focus)
+# Group by ZONE and summarize total value and average rate
+land_tx_zone_summary <- df %>%
+  group_by(ZONE) %>%
+  summarise(
+    total_value = sum(VALUE, na.rm = TRUE),
+    avg_rate = mean(RATE, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_value)) %>%
+  slice(1:2)  # Top 2 zones by total transaction value
+
+# Extract top zone 1 (most valuable segment)
+z1_name <- paste0("**", land_tx_zone_summary$ZONE[1], "**")
+z1_val <- paste0("**SAR ", formatC(round(land_tx_zone_summary$total_value[1], 0), format = "f", digits = 0, big.mark = ","), "**")
+z1_val_m <- paste0("**SAR ", formatC(round(land_tx_zone_summary$total_value[1] / 1e6, 2), format = "f", digits = 2, big.mark = ","), " million**")
+z1_rate <- paste0("**SAR ", formatC(round(land_tx_zone_summary$avg_rate[1], 0), format = "f", digits = 0, big.mark = ","), "**")
+
+# Extract top zone 2 (supporting segment)
+z2_name <- paste0("**", land_tx_zone_summary$ZONE[2], "**")
+z2_val <- paste0("**SAR ", formatC(round(land_tx_zone_summary$total_value[2], 0), format = "f", digits = 0, big.mark = ","), "**")
+z2_val_m <- paste0("**SAR ", formatC(round(land_tx_zone_summary$total_value[2] / 1e6, 2), format = "f", digits = 2, big.mark = ","), " million**")
+
+
+```
+## Reports {.tabset}
+###  REPORT-1
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** sqm unit in **`r hv_n1`** fetched  **`r hv_v1`**, equating to  **`r hv_r1`** per sqm, marking the top sale. **`r hv_n2`** saw a **`r hv_a2`** sqm property sold for  **`r hv_v2`** ( **`r hv_r2`**per sqm) on **`r hv_d2`**, reflecting strong interest in luxury real estate.
+
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** leads with an average price of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers more affordable options, averaging around **`r p_rl`** per sqm
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded approximately  **`r d_c1`** transactions, showcasing significant buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with about **`r d_c2`** and **`r d_c3`** sales, respectively, indicating robust market activity.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract upscale buyers. **`r villa_t$neighborhood`** villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, appeal to family buyers. Residential commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor interest.
+
+#### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, where prices reach up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more budget-conscious buyers, with prices spanning **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, highlighting demand for sizable development land.
+
+
+#### 7. Top Land Transactions by Value in Zone
+The `r z1_name` zone led land transaction activity with a cumulative value of `r z1_val`, and an average rate of `r z1_rate` per sqm, highlighting its appeal for high-value acquisitions. Close behind, the `r z2_name` zone recorded `r z2_val` in total land sales, reflecting ongoing investor interest in strategic plot locations.
+
+
+
+
+
+
+### REPORT-2
+
+#### 1. High-Value Transactions
+
+A **`r hv_a1`** sqm unit in  **`r hv_r1`** sold for SAR **`r hv_n1`** (**`r hv_v1`** per sqm) on **`r hv_d1`**, marking the top transaction. On **`r hv_d2`**, **`r hv_n2`** saw **`r hv_a2`** sqm property fetch **`r hv_v2`** ( **`r hv_r2`** per sqm), indicating strong premium market interest.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** commands top prices at **`r p_r1`** per sqm, sqm followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers more budget-friendly options at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** leads with approximately **`r d_c1`** sales, showcasing significant buyer interest. **`r d_n2`** and **`r d_n3`** follow with about **`r d_c2`** and **`r d_c3`** transactions, respectively, reflecting sustained market engagement.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract upscale buyers. **`r villa_t$neighborhood`** villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, appeal to family buyers. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, attract investors.
+
+#### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, with prices up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more affordable segments, with prices between **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, signaling demand for sizable development land.
+
+
+#### 7. Top Land Transactions by Value in Zone
+With land transactions totaling `r z1_val` and an average price of `r z1_rate` per sqm, the `r z1_name` zone stood out as the most valuable segment, demonstrating its strong appeal among investors. Meanwhile, `r z2_name` zones contributed `r z2_val` in total, emphasizing interest in well-positioned individual plots.
+
+
+
+###  REPORT-3
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** sqm property in **`r hv_r1`** sold for SAR **`r hv_n1`**, translating to **`r hv_v1`** per sqm, the highest deal recorded. **`r hv_n2`** saw a **`r hv_a2`** sqm unit fetch **`r hv_v2`** (**`r hv_r2`** per sqm) on **`r hv_d2`**, reflecting keen interest in upscale properties.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** sets the benchmark with an average of **`r p_r1`** per sqm. **`r p_n2`** and **`r p_r2`** follow at **`r p_n3`** and **`r p_r3`** per sqm, respectively, while **`r p_nl`** offers more economical pricing at roughly **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** leads with around **`r d_c1`** sales, signaling robust buyer demand.  **`r d_n2`** and **`r d_n3`** trail with approximately **`r d_c2`** and **`r d_c3`** transactions, respectively, demonstrating steady market traction
+
+#### 4. Property Type Trends
+In **`r res_building_t$neighborhood`**, residential buildings priced from **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm appeal to affluent buyers. **`r villa_t$neighborhood`** villas, ranging from **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, attract family-oriented purchasers. **`r res_commercial_t$neighborhood`** commercial properties, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, are favored by investors.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** cater to luxury buyers with prices up to **`r s_lux_max`** per sqm. More accessible markets like  **`r s_aff1`** and **`r s_aff2`** offer properties priced between **`r s_aff_min`** to **`r s_aff_max`**, accommodating diverse budgets.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** sqm plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** sqm plot in **`r l_n2`** went for **`r l_v2`**, indicating strong demand for large development plots.
+
+#### 7. Top Land Transactions by Value in Zone
+Leading the land investment landscape, the `r z1_name` zone amassed `r z1_val_m` in total transactions at an average of `r z1_rate` per sqm, signaling robust investor demand. The `r z2_name` zone followed, closing `r z2_val_m` in transactions, reflecting continued strategic interest.
+
+
+
+
+###  REPORT-4
+
+#### 1. High-Value Transactions
+
+On **`r hv_d1 `**, a **`r hv_a1 `** unit in **`r hv_n1 `** fetched **`r hv_v1 `** (SAR **`r hv_r1 `** per sqm), the highest sale recorded. A **`r hv_a2` ** property in **`r hv_n2 `** sold for **`r hv_v2 `** (SAR **`r hv_r2 `** per sqm) on **`r hv_d2 `**, signaling strong demand for premium real estate.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1 `** leads with an average of **`r p_r1 `** per sqm, followed by **`r p_n2 `** at **`r p_r2 `** per sqm and **`r p_n3 `** at **`r p_r3 `** per sqm. **`r p_nl `** remains cost-effective, averaging **`r p_rl `** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+**`r d_n1 `** saw about **`r d_c1 `** transactions, indicating high buyer enthusiasm. **`r d_n2 `** and **`r d_n3 `** followed with roughly **`r d_c2 `** and **`r d_c3 `** transactions, respectively, reflecting ongoing market vitality.
+
+#### 4. Property Type Trends
+
+**`r res_building_t$neighborhood `**’s residential buildings, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",") `** to SAR **`r format(res_building_t$max_rate, big.mark = ",") `** per sqm, appeal to high-end buyers. Villas in **`r villa_t$neighborhood `**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",") `** to SAR **`r format(villa_t$max_rate, big.mark = ",") `** per sqm, attract family buyers. Commercial units in **`r res_commercial_t$neighborhood `**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",") `** per sqm, are popular among investors.
+
+#### 5. Pricing Segmentation
+
+**`r s_lux1 `** and **`r s_lux2 `** attract luxury buyers with prices peaking at **`r s_lux_max `** per sqm. More affordable neighborhoods like **`r s_aff1 `** and **`r s_aff2 `** offer prices ranging from **`r s_aff_min `** to **`r s_aff_max `** per sqm.
+
+#### 6. Largest Plot Deals
+
+On **`r l_d1 `**, a **`r l_a1 `** plot in **`r l_n1 `** sold for **`r l_v1 `** (SAR **`r l_r1 `** per sqm). A **`r l_a2 `** plot in **`r l_n2 `** went for **`r l_v2 `** on **`r l_d2 `**, showing interest in large land for development.
+
+#### 7. Top Land Transactions by Value in Zone
+Residential Buildings topped the land transaction charts with `r z1_val` in cumulative sales and an average rate of `r z1_rate` per sqm, illustrating a strong market for larger developments. In parallel, `r z2_name` zones generated `r z2_val` in value, affirming their relevance in the residential land market.
+
+
+
+
+###  REPORT-5
+
+#### 1. High-Value Transactions
+**`r hv_n1`** recorded the highest sale with a **`r hv_a1`** unit fetching **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**. **`r hv_n2`** followed closely with a **`r hv_a2`** unit sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, showing strong demand for premium properties.
+
+
+#### 2. Premium Pricing by Neighborhood
+Prices vary significantly by neighborhood, with **`r p_n1`** leading at approximately **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow with solid averages near **`r p_r2`** and **`r p_r3`** per sqm, respectively. More affordable neighborhoods like **`r p_nl`** average around **`r p_rl`** per sqm.
+
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** shows the highest transaction volume with roughly **`r d_c1`** sales, indicating strong buyer interest. **`r d_n2`** and **`r d_n3`** follow with about **`r d_c2`** and **`r d_c3`** transactions respectively, reflecting sustained market activity.
+
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`** appeal to premium buyers with prices ranging from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm. Villas in **`r villa_t$neighborhood`** attract families, priced between SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm. Commercial properties in **`r res_commercial_t$neighborhood`** draw investor interest, averaging around SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm.
+
+
+#### 5. Pricing Segmentation
+The market serves diverse buyers, with luxury buyers concentrated in **`r s_lux1`** and **`r s_lux2`**, where prices can reach up to **`r s_lux_max`** per sqm. Meanwhile, neighborhoods like **`r s_aff1`** and **`r s_aff2`** offer more affordable options, ranging from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+#### 6. Largest Plot Deals
+Demand for large plots remains strong; **`r l_n1`** saw a top sale of **`r l_v1`** for a **`r l_a1`** plot (**`r l_r1`** per sqm) on **`r l_d1`**. **`r l_n2`** recorded **`r l_v2`** for a **`r l_a2`** plot on **`r l_d2`**, highlighting interest in sizable project-ready land.
+
+
+#### 7. Top Land Transactions by Value in Zone
+Posting the highest land transaction value, the `r z1_name` zone reached `r z1_val_m` with an average rate of `r z1_rate` per sqm, reinforcing its role in driving high-capital acquisitions. `r z2_name` zones, with `r z2_val_m` in total, also attracted meaningful investment.
+
+
+
+###  REPORT-6
+
+#### 1. High-Value Transactions
+**`r hv_n1`** led luxury property sales with a **`r hv_a1`** unit selling for **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**. **`r hv_n2`** followed on **`r hv_d2`**, with a **`r hv_a2`** unit sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm), showcasing solid market interest in upscale units.
+
+#### 2. Premium Pricing by Neighborhood
+Premium neighborhoods exhibit significant pricing differences. **`r p_n1`** tops the list with an average rate of **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow, averaging **`r p_r2`** and **`r p_r3`** per sqm respectively. In contrast, **`r p_nl`** offers affordability with units priced around **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** shows unmatched buyer activity with approximately **`r d_c1`** transactions. **`r d_n2`** maintains strong momentum with around **`r d_c2`** deals, while **`r d_n3`** remains active with **`r d_c3`** sales, reflecting widespread market participation.
+
+#### 4. Property Type Trends
+In **`r res_building_t$neighborhood`**, **residential buildings** priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** and SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm appeal to premium buyers. **`r villa_t$neighborhood`’s villas**, priced from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, attract family-oriented segments. **`r res_commercial_t$neighborhood`'s commercial units** average **SAR `r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, capturing investor interest.
+
+#### 5. Pricing Segmentation
+Luxury pricing defines **`r s_lux1`** and **`r s_lux2`**, with top rates hitting **`r s_lux_max`** per sqm. Conversely, **`r s_aff1`** and **`r s_aff2`** cater to value-conscious buyers, with prices ranging between **`r s_aff_min`** and **`r s_aff_max`** per sqm, offering broader accessibility.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** fetched **`r l_v1`** (**`r l_r1`** per sqm). A second major deal on **`r l_d2`** saw **`r l_n2`** transact **`r l_a2`** for **`r l_v2`**, signaling demand for large, centrally located parcels.
+
+#### 7. Top Land Transactions by Value in Zone
+The `r z1_name` category emerged as the most lucrative zone, garnering `r z1_val` in land transactions at an average rate of `r z1_rate` per sqm. Notably, `r z2_name` zones followed with `r z2_val`, indicating resilient demand for select plots.
+
+
+
+###  REPORT-7
+
+#### 1. High-Value Transactions
+A **`r hv_a1`** property in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**, marking the top sale. On **`r hv_d2`**, a **`r hv_a2`** unit in **`r hv_n2`** went for **`r hv_v2`** (SAR **`r hv_r2`** per sqm), reflecting robust luxury market demand.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** tops the market with prices averaging **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow at **`r p_r2`** and **`r p_r3`** per sqm, respectively, while **`r p_nl`** offers more accessible pricing at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+With roughly **`r d_c1`** sales, **`r d_n1`** leads in transaction volume. **`r d_n2`** and **`r d_n3`** record about **`r d_c2`** and **`r d_c3`** transactions, respectively, showcasing sustained market interest.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**'s residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** and SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract affluent buyers. **`r villa_t$neighborhood`’s villas**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, are favored by families. **`r res_commercial_t$neighborhood`**'s commercial properties, at **SAR `r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investors.
+
+#### 5. Pricing Segmentation
+Luxury buyers gravitate toward **`r s_lux1`** and **`r s_lux2`**, with prices up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** serve more budget-conscious buyers, with prices from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** was sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`**, indicating interest in large development parcels.
+
+#### 7. Top Land Transactions by Value in Zone 
+At `r z1_rate` per sqm, the `r z1_name` zone achieved a total land transaction value of `r z1_val`, confirming its status as the premier segment for high-value land acquisition. The `r z2_name` zone, with `r z2_val`, also maintained solid investor engagement.
+
+
+
+
+###  REPORT-8
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** unit in **`r hv_n1`** fetched **`r hv_v1`** (SAR **`r hv_r1`** per sqm), the highest sale recorded. A **`r hv_a2`** property in **`r hv_n2`** sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, signaling strong demand for premium real estate.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** leads with an average of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** remains cost-effective, averaging **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** saw about **`r d_c1`** transactions, indicating high buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with roughly **`r d_c2`** and **`r d_c3`** sales, respectively, reflecting ongoing market vitality.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`’s residential buildings**, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, appeal to high-end buyers. Villas in **`r villa_t$neighborhood`**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, attract family buyers. Commercial units in **`r res_commercial_t$neighborhood`**, averaging **SAR `r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, are popular among investors.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** attract luxury buyers with prices peaking at **`r s_lux_max`** per sqm. More affordable neighborhoods like **`r s_aff1`** and **`r s_aff2`** offer prices ranging from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** went for **`r l_v2`** on **`r l_d2`**, showing interest in large land for development.
+
+#### 7. Top Land Transactions by Value in Zone
+`r z1_name` zones led the land transaction market with sales reaching `r z1_val_m` at an average of `r z1_rate` per sqm, underscoring significant capital interest. In second place, `r z2_name` plots accumulated `r z2_val_m`, reflecting ongoing investor momentum.
+
+
+
+###  REPORT-9
+
+#### 1. High-Value Transactions
+A **`r hv_a1`** unit in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**, the top transaction. On **`r hv_d2`**, a **`r hv_a2`** property in **`r hv_n2`** fetched **`r hv_v2`** (SAR **`r hv_r2`** per sqm), indicating robust luxury market interest.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** commands top prices at **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers budget-friendly options at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** leads with approximately **`r d_c1`** sales, showcasing significant buyer interest. **`r d_n2`** and **`r d_n3`** follow with about **`r d_c2`** and **`r d_c3`** transactions, respectively, reflecting sustained market engagement.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**’ residential buildings, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, draw affluent buyers. **`r villa_t$neighborhood`**’s villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, appeal to family buyers. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, attract investors.
+
+#### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, with prices up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more affordable segments, with prices between **`r s_aff_min`** and **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** fetched **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** sold for **`r l_v2`** on **`r l_d2`**, signaling demand for sizable development land.
+
+#### 7. Top Land Transactions by Value in Zone
+The top-performing segment in land sales was the `r z1_name` zone, with `r z1_val` in total value and an average transaction rate of `r z1_rate` per sqm. The `r z2_name` zone followed with `r z2_val`, illustrating continued investor targeting of strategic plots.
+
+
+
+
+###  REPORT-10
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** property in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm), the highest deal. A **`r hv_a2`** unit in **`r hv_n2`** went for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, reflecting strong demand for premium properties.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** averages **`r p_r1`** per sqm, leading the market. **`r p_n2`** and **`r p_n3`** follow at **`r p_r2`** and **`r p_r3`**, respectively, while **`r p_nl`** offers more affordable pricing at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded around **`r d_c1`** transactions, indicating robust buyer activity. **`r d_n2`** and **`r d_n3`** followed with approximately **`r d_c2`** and **`r d_c3`** sales, respectively, showing consistent market momentum.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**’ residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** and SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract high-end buyers. Villas in **`r villa_t$neighborhood`**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, are favored by families. Commercial units in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor interest.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** target luxury buyers with prices reaching **`r s_lux_max`** per sqm. More accessible areas like **`r s_aff1`** and **`r s_aff2`** offer properties priced from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`**, highlighting demand for large plots.
+
+#### 7. Top Land Transactions by Value in Zone 
+With an impressive `r z1_val` in land transaction volume and an average rate of `r z1_rate` per sqm, the `r z1_name` zone demonstrated strong investor preference. Close behind, the `r z2_name` zone recorded `r z2_val`, suggesting durable market confidence.
+
+
+
+###  REPORT-11
+
+#### 1. High-Value Transactions
+A **`r hv_a1`** unit in **`r hv_n1`** fetched **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**, the top sale. On **`r hv_d2`**, a **`r hv_a2`** property in **`r hv_n2`** sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm), showcasing strong luxury market demand.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** commands premium prices, averaging **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** are priced at **`r p_r2`** and **`r p_r3`**, respectively, while **`r p_nl`** provides budget-friendly options at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+With about **`r d_c1`** sales, **`r d_n1`** exhibits strong buyer interest. **`r d_n2`** and **`r d_n3`** follow with roughly **`r d_c2`** and **`r d_c3`** transactions, respectively, reflecting sustained market activity.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, draw premium buyers. Villas in **`r villa_t$neighborhood`**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, appeal to families. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, attract investment interest.
+
+#### 5. Pricing Segmentation
+Luxury markets in **`r s_lux1`** and **`r s_lux2`** see prices up to **`r s_lux_max`** per sqm, while **`r s_aff1`** and **`r s_aff2`** offer more affordable properties, priced from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** was sold for **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`** on **`r l_d2`**, signaling interest in sizable development land.
+
+#### 7. Top Land Transactions by Value in Zone
+Investors concentrated their capital primarily in `r z1_name` zones, which led with `r z1_val_m` in total transactions and an average of `r z1_rate` per sqm. Meanwhile, `r z2_name` plots secured `r z2_val_m` in sales, evidencing a solid secondary demand tier.
+
+
+
+
+###  REPORT-12
+
+#### 1. High-Value Transactions
+A standout sale in **`r hv_n1`** on **`r hv_d1`** involved a **`r hv_a1`** unit sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm). On **`r hv_d2`**, a **`r hv_a2`** unit in **`r hv_n2`** went for **`r hv_v2`** (SAR **`r hv_r2`** per sqm), underscoring premium property demand.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** commands the highest prices at approximately **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow with averages of **`r p_r2`** and **`r p_r3`** per sqm, respectively. **`r p_nl`** remains more accessible, with prices around **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+With roughly **`r d_c1`** sales, **`r d_n1`** leads in transaction volume, reflecting strong market interest. **`r d_n2`** and **`r d_n3`** trail with approximately **`r d_c2`** and **`r d_c3`** transactions, respectively, showing consistent buyer engagement.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**’ residential buildings, ranging from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, appeal to high-end buyers. Villas in **`r villa_t$neighborhood`**, priced between SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`**, attract families. **`r res_commercial_t$neighborhood`**’ commercial units, at SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, are popular among investors.
+
+#### 5. Pricing Segmentation
+High-end buyers gravitate toward **`r s_lux1`** and **`r s_lux2`**, with prices peaking at **`r s_lux_max`** per sqm. More affordable options in **`r s_aff1`** and **`r s_aff2`** range from **`r s_aff_min`** to **`r s_aff_max`** per sqm, serving diverse market segments.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`**, signaling interest in large development parcels.
+
+#### 7. Top Land Transactions by Value in Zone 
+The `r z1_name` zone attracted the lion’s share of land investment, totaling `r z1_val` at `r z1_rate` per sqm, underscoring high development potential. The `r z2_name` zone trailed with `r z2_val`, continuing to draw interest for low-density investments.
+
+
+
+
+###  REPORT-13
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** property in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm), marking the highest transaction. A **`r hv_a2`** unit in **`r hv_n2`** went for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, reflecting robust premium property demand.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** tops the market with an average of **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow at **`r p_r2`** and **`r p_r3`** per sqm, respectively, while **`r p_nl`** offers more accessible pricing at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded around **`r d_c1`** transactions, showcasing significant buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with approximately **`r d_c2`** and **`r d_c3`** sales, respectively, indicating consistent market engagement.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**’ residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** and SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract affluent buyers. **`r villa_t$neighborhood`**’s villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, are popular among families. Commercial units in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor attention.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** cater to high-end buyers with prices peaking at **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** serve more budget-conscious buyers, with prices from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`**, highlighting demand for large development parcels.
+
+#### 7. Top Land Transactions by Value in zone 
+ With `r z1_val` in total land sales and an average rate of `r z1_rate` per sqm, `r z1_name` zones led the market in high-value acquisitions. `r z2_name` zones, while smaller in volume, still drew `r z2_val`, indicating investor appetite for diversified residential formats.
+
+
+
+
+###  REPORT-14
+
+#### 1. High-Value Transactions
+**`r hv_n1`**’s top transaction on **`r hv_d1`** was a **`r hv_a1`** unit sold for **`r hv_v1`**, or SAR **`r hv_r1`** per sqm. **`r hv_n2`** followed with a **`r hv_a2`** property sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, indicating robust luxury demand.
+
+#### 2. Premium Pricing by Neighborhood
+Prices in **`r p_n1`** average **`r p_r1`** per sqm, leading the market. **`r p_n2`** and **`r p_n3`** are next at **`r p_r2`** and **`r p_r3`** per sqm, respectively. **`r p_nl`** offers budget-friendly options at around **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** dominates with about **`r d_c1`** transactions, showcasing high buyer interest. **`r d_n2`** and **`r d_n3`** follow with **`r d_c2`** and **`r d_c3`** sales, respectively, reflecting sustained market momentum.
+
+#### 4. Property Type Trends
+In **`r res_building_t$neighborhood`**, residential buildings priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm draw premium buyers. **`r villa_t$neighborhood`**’s villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, cater to families. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, attract investors.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** attract luxury buyers with prices up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** offer more affordable properties, with prices between **`r s_aff_min`** and **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, **`r l_n1`** recorded a **`r l_a1`** plot sale for **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** sold for **`r l_v2`** on **`r l_d2`**, highlighting demand for large plots.
+
+#### 7. Top Land Transactions by Value
+**`r t_n1`** saw a major **`r t_v1`** sale for **`r t_a1`** (**`r t_r1`** per sqm) on **`r t_d1`**. On **`r t_d2`**, **`r t_n2`** recorded a **`r t_v2`** transaction for **`r t_a2`** (**`r t_r2`** per sqm), reflecting strategic land acquisitions.
+
+
+
+###  REPORT-15
+
+#### 1. High-Value Transactions
+A **`r hv_a1`** unit in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**, the highest recorded sale. On **`r hv_d2`**, **`r hv_n2`** saw a **`r hv_a2`** property fetch **`r hv_v2`** (SAR **`r hv_r2`** per sqm), signaling strong luxury market activity.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** tops pricing at **`r p_r1`**, with **`r p_n2`** and **`r p_n3`** at **`r p_r2`** and **`r p_r3`**, respectively. **`r p_nl`** remains cost-effective, averaging **`r p_rl`**.
+
+#### 3. High-Demand Neighborhoods
+With around **`r d_c1`** transactions, **`r d_n1`** leads in buyer activity. **`r d_n2`** and **`r d_n3`** record **`r d_c2`** and **`r d_c3`** sales, respectively, reflecting ongoing market vitality.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, with prices from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, appeal to affluent buyers. Villas in **`r villa_t$neighborhood`**, priced between SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`**, are favored by families. **`r res_commercial_t$neighborhood`**’s commercial units, at SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor attention.
+
+#### 5. Pricing Segmentation
+Luxury markets in **`r s_lux1`** and **`r s_lux2`** see prices up to **`r s_lux_max`**, while **`r s_aff1`** and **`r s_aff2`** range from **`r s_aff_min`** to **`r s_aff_max`**, serving varied buyer needs.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** was sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, indicating interest in sizable land parcels.
+
+#### 7. Top Land Transactions by Value in Zone 
+The `r z1_name` zone emerged as the frontrunner in land transaction value, recording a total of `r z1_val` at an average rate of `r z1_rate` per sqm, signaling sustained demand for high-density residential development. In contrast, the `r z2_name` zone followed with `r z2_val`, reflecting selective yet consistent investor interest in individual plots.
+
+
+
+###  REPORT-16
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** sqm unit in **`r hv_n1`** fetched  **`r hv_v1`**, equating to  **`r hv_r1`** per sqm, marking the top sale. **`r hv_n2`** saw a **`r hv_a2`** sqm property sold for  **`r hv_v2`** ( **`r hv_r2`**per sqm) on **`r hv_d2`**, reflecting strong interest in luxury real estate.
+
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** leads with an average price of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers more affordable options, averaging around **`r p_rl`** per sqm
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded approximately  **`r d_c1`** transactions, showcasing significant buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with about **`r d_c2`** and **`r d_c3`** sales, respectively, indicating robust market activity.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract upscale buyers. **`r villa_t$neighborhood`** villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, appeal to family buyers. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor interest.
+
+#### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, where prices reach up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more budget-conscious buyers, with prices spanning **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, highlighting demand for sizable development land.
+
+
+#### 7. Top Land Transactions by Value in Zone 
+The `r z1_name` zone emerged as the frontrunner in land transaction value, recording a total of `r z1_val` at an average rate of `r z1_rate` per sqm, signaling sustained demand for high-density residential development. In contrast, the `r z2_name` zone followed with `r z2_val`, reflecting selective yet consistent investor interest in individual plots.
+
+
+
+
+###  REPORT-17
+
+#### 1. High-Value Transactions
+
+On **`r hv_d1`**, a **`r hv_a1`** unit in **`r hv_n1`** fetched **`r hv_v1`** (SAR **`r hv_r1`** per sqm), the highest sale recorded. A **`r hv_a2`** property in **`r hv_n2`** sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, signaling strong demand for premium real estate.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1`** leads with an average of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** remains cost-effective, averaging **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+**`r d_n1`** saw about **`r d_c1`** transactions, indicating high buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with roughly **`r d_c2`** and **`r d_c3`** transactions, respectively, reflecting ongoing market vitality.
+
+#### 4. Property Type Trends
+
+**`r res_building_t$neighborhood`** residential buildings, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, appeal to high-end buyers. Villas in **`r villa_t$neighborhood`**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, attract family buyers. Commercial units in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, are popular among investors.
+
+#### 5. Pricing Segmentation
+
+**`r s_lux1`** and **`r s_lux2`** attract luxury buyers with prices peaking at **`r s_lux_max`** per sqm. More affordable neighborhoods like **`r s_aff1`** and **`r s_aff2`** offer prices ranging from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+
+On **`r l_d1`**, a **`r l_a1`** plot in  **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** went for **`r l_v2`** on **`r l_d2`**, showing interest in large land for development.
+
+#### 7. Top Land Transactions by Value in Zone 
+Land transactions were led by the `r z1_name` zone, which generated `r z1_val_m` in sales at an average of `r z1_rate` per sqm—underscoring its positioning as a preferred choice for large-scale residential investments. The `r z2_name` zone secured `r z2_val_m`, highlighting its value in niche, low-density segments.
+
+
+
+###  REPORT-18
+
+#### 1. High-Value Transactions
+
+On **`r hv_d1 `**, a **`r hv_a1 `** property in **`r hv_n1 `** sold for **`r hv_v1 `** (SAR **`r hv_r1 `** per sqm), the highest deal. A **`r hv_a2 `** unit in **`r hv_n2 `** went for **`r hv_v2 `** (SAR **`r hv_r2 `** per sqm) on **`r hv_d2 `**, reflecting strong demand for premium properties.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1 `** averages **`r p_r1 `** per sqm, leading the market. **`r p_n2 `** and **`r p_n3 `** follow at **`r p_r2 `** and **`r p_r3` ** per sqm, respectively, while **`r p_nl `** offers more affordable pricing at **`r p_rl `** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+**`r d_n1 `** recorded around **`r d_c1` ** transactions, indicating robust buyer activity. **`r d_n2 `** and **`r d_n3 `** followed with approximately **`r d_c2 `** and **`r d_c3 `** sales, respectively, showing consistent market momentum.
+
+#### 4. Property Type Trends
+
+**`r res_building_t$neighborhood `**’s residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",") `** to SAR **`r format(res_building_t$max_rate, big.mark = ",") `** per sqm, attract high-end buyers. Villas in **`r villa_t$neighborhood `**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")` ** to SAR **`r format(villa_t$max_rate, big.mark = ",")` ** per sqm, are favored by families. Commercial units in **`r res_commercial_t$neighborhood `**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",") `** per sqm, draw investor interest.
+
+#### 5. Pricing Segmentation
+
+**`r s_lux1 `** and **`r s_lux2 `** target luxury buyers with prices reaching **`r s_lux_max` ** per sqm. More accessible areas like **`r s_aff1 `** and **`r s_aff2`** offer properties priced from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+
+A **`r l_a1`** plot in **`r l_n1 `** sold for **`r l_v1 `** (SAR **`r l_r1 `** per sqm) on **`r l_d1` **. On **`r l_d2 `**, a **`r l_a2 `** plot in **`r l_n2 `** fetched **`r l_v2 `**, highlighting demand for large plots.
+
+#### 7. Top Land Transactions by Value in Zone 
+ Dominating the transaction landscape, `r z1_name` accounted for a total of `r z1_val_m` in land deals at `r z1_rate` per sqm, reinforcing the zone’s appeal for concentrated residential development. The `r z2_name` zone’s total of `r z2_val_m` further validated consistent interest in private residential spaces.
+
+
+
+###  REPORT-19
+
+#### 1. High-Value Transactions
+
+A **`r hv_a1 `** unit in **`r hv_n1 `** fetched **`r hv_v1 `** (SAR **`r hv_r1 `** per sqm) on **`r hv_d1 `**, the top sale. On **`r hv_d2` **, a **`r hv_a2 `** property in **`r hv_n2 `** sold for **`r hv_v2 `** (SAR **`r hv_r2 `** per sqm), showcasing strong luxury market demand.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1 `** commands premium prices, averaging **`r p_r1 `** per sqm. **`r p_n2 `** and **`r p_n3 `** are priced at **`r p_r2 `** and **`r p_r3 `** per sqm, respectively, while **`r p_nl `** provides budget-friendly options at **`r p_rl `** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+With about **`r d_c1 `** sales, **`r d_n1 `** exhibits strong buyer interest. **`r d_n2 `** and **`r d_n3 `** follow with roughly **`r d_c2 `** and **`r d_c3 `** transactions, respectively, reflecting sustained market activity.
+
+#### 4. Property Type Trends
+
+Residential buildings in **`r res_building_t$neighborhood `**, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",") `** to SAR **`r format(res_building_t$max_rate, big.mark = ",") `** per sqm, draw premium buyers. Villas in **`r villa_t$neighborhood `**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")` ** to SAR **`r format(villa_t$max_rate, big.mark = ",") `** per sqm, appeal to families. Commercial properties in **`r res_commercial_t$neighborhood `**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",") `** per sqm, attract investment interest.
+
+#### 5. Pricing Segmentation
+
+Luxury markets in **`r s_lux1 `** and **`r s_lux2 `** see prices up to **`r s_lux_max `** per sqm, while **`r s_aff1 `** and **`r s_aff2 `** offer more affordable properties, priced from **`r s_aff_min `** to **`r s_aff_max `** per sqm.
+
+#### 6. Largest Plot Deals
+
+On **`r l_d1 `**, a **`r l_a1 `** plot in **`r l_n1 `** was sold for **`r l_v1 `** (SAR **`r l_r1 `** per sqm). A **`r l_a2 `** plot in **`r l_n2 `** fetched **`r l_v2 `** on **`r l_d2 `**, signaling interest in sizable development land.
+
+#### 7. Top Land Transactions by Value in Zone 
+
+Residential land sales reached a high point in the `r z1_name` zone, with an impressive `r z1_val` at `r z1_rate` per sqm, making it the most sought-after category. By comparison, `r z2_name` zones brought in `r z2_val`, still showcasing resilient investor engagement.
+
+
+
+###  REPORT-20
+
+#### 1. High-Value Transactions
+
+On **`r hv_d1 `**, a **`r hv_a1 `** property in **`r hv_n1 `** sold for **`r hv_v1 `** (SAR **`r hv_r1 `** per sqm), marking the highest transaction. A **`r hv_a2 `** unit in **`r hv_n2 `** went for **`r hv_v2 `** (SAR **`r hv_r2 `** per sqm) on **`r hv_d2 `**, reflecting robust premium property demand.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1 `** tops the market with an average of **`r p_r1 `** per sqm. **`r p_n2 `** and **`r p_n3 `** follow at **`r p_r2 `** and **`r p_r3 `** per sqm, respectively, while **`r p_nl `** offers more accessible pricing at **`r p_rl `** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+**`r d_n1 `** recorded around **`r d_c1 `** transactions, showcasing significant buyer enthusiasm. **`r d_n2 `** and **`r d_n3 `** followed with approximately **`r d_c2 `** and **`r d_c3 `** sales, respectively, indicating consistent market engagement.
+
+#### 4. Property Type Trends
+
+**`r res_building_t$neighborhood `**’s residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",") `** to SAR **`r format(res_building_t$max_rate, big.mark = ",") `** per sqm, attract affluent buyers. **`r villa_t$neighborhood `**’s villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",") `** to SAR **`r format(villa_t$max_rate, big.mark = ",") `** per sqm, are popular among families. Commercial units in **`r res_commercial_t$neighborhood `**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",") `** per sqm, draw investor attention.
+
+#### 5. Pricing Segmentation
+
+**`r s_lux1 `** and **`r s_lux2 `** cater to high-end buyers with prices peaking at **`r s_lux_max `** per sqm. **`r s_aff1 `** and **`r s_aff2 `** serve more budget-conscious buyers, with prices from **`r s_aff_min `** to **`r s_aff_max `** per sqm.
+
+#### 6. Largest Plot Deals
+
+A **`r l_a1 `** plot in **`r l_n1 `** sold for **`r l_v1 `** (SAR **`r l_r1 `** per sqm) on **`r l_d1 `**. On **`r l_d2 `**, a **`r l_a2 `** plot in **`r l_n2 `** fetched **`r l_v2 `**, highlighting demand for large development parcels.
+
+#### 7. Top Land Transactions by Value in Zone 
+
+The real estate data reveals strong momentum in the `r z1_name` zone, which amassed `r z1_val_m` in land sales at a unit rate of `r z1_rate` per sqm. The `r z2_name` zone, with a transaction volume of `r z2_val_m`, maintained a solid presence in investor portfolios focused on individual residences.
+
+
+
+
+

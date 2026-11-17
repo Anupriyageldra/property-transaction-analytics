@@ -1,0 +1,2155 @@
+---
+title: "Report Generation"
+output: 
+  html_document:
+    self_contained: false
+    mode: selfcontained
+    number_sections: yes
+    toc: true
+    toc_float: true
+    collapsed: false
+    smooth_scroll: false
+    toc_depth: 3
+    orientation: rows
+    fig_width: 7
+    fig_height: 4.5
+    theme: cosmo
+    highlight: tango
+    code_folding: hide
+    flexdashboard::flex_dashboard: null
+---
+
+# Independent properties 
+
+```{r,message=FALSE,warning=FALSE,echo=FALSE}
+library(dplyr)
+library(readr)
+library(DT)
+
+# Read the data
+df <- read_csv("~/7.Narration/0.Consolidate/Input/1.Independent/independent_properties_1749538128833.csv")
+
+# 1. Highest Total Land Area
+max_land_area <- df %>%
+  slice(which.max(TOTAL_LAND_AREA_sqm)) %>%
+  select(NEIGHBORHOOD, TOTAL_LAND_AREA_sqm)
+max_neighborhood <- max_land_area$NEIGHBORHOOD
+max_area <- max_land_area$TOTAL_LAND_AREA_sqm
+
+# 2. Highest Average Land Area per Property
+top_avg_land <- df %>%
+  arrange(desc(`AVG. LAND AREA(sqm)`)) %>%
+  slice(1:2) %>%
+  select(NEIGHBORHOOD, `AVG. LAND AREA(sqm)`)
+first_neighborhood <- top_avg_land$NEIGHBORHOOD[1]
+first_avg_area <- top_avg_land$`AVG. LAND AREA(sqm)`[1]
+second_neighborhood <- top_avg_land$NEIGHBORHOOD[2]
+second_avg_area <- top_avg_land$`AVG. LAND AREA(sqm)`[2]
+
+# 3. Most Properties
+max_properties <- df %>%
+  slice(which.max(`No. of Properties`)) %>%
+  select(NEIGHBORHOOD, `No. of Properties`, `AVG. LAND AREA(sqm)`)
+prop_neighborhood <- max_properties$NEIGHBORHOOD
+prop_count <- max_properties$`No. of Properties`
+prop_avg_area <- max_properties$`AVG. LAND AREA(sqm)`
+
+# 4. Most Vacant Land
+max_vacant <- df %>%
+  slice(which.max(`NO. OF VACANT LAND`)) %>%
+  select(NEIGHBORHOOD, `NO. OF VACANT LAND`)
+vacant_neighborhood <- max_vacant$NEIGHBORHOOD
+vacant_count <- max_vacant$`NO. OF VACANT LAND`
+
+# 5. Least Developed Area
+least_properties <- df %>%
+  slice(which.min(`No. of Properties`)) %>%
+  select(NEIGHBORHOOD, `No. of Properties`, `NO. OF VACANT LAND`)
+least_prop_neighborhood <- least_properties$NEIGHBORHOOD
+least_prop_count <- least_properties$`No. of Properties`
+least_vacant_count <- least_properties$`NO. OF VACANT LAND`
+
+# 6. Compact Neighborhoods with Large Plots
+compact_large_plots <- df %>%
+  filter(TOTAL_LAND_AREA_sqm < median(TOTAL_LAND_AREA_sqm)) %>%
+  arrange(desc(`AVG. LAND AREA(sqm)`)) %>%
+  slice(1:2) %>%
+  select(NEIGHBORHOOD, `AVG. LAND AREA(sqm)`)
+compact_neighborhood_1 <- compact_large_plots$NEIGHBORHOOD[1]
+compact_avg_area_1 <- compact_large_plots$`AVG. LAND AREA(sqm)`[1]
+compact_neighborhood_2 <- compact_large_plots$NEIGHBORHOOD[2]
+compact_avg_area_2 <- compact_large_plots$`AVG. LAND AREA(sqm)`[2]
+
+# 7. Smaller Neighborhood with High Plot Size
+small_high_plot <- df %>%
+  filter(TOTAL_LAND_AREA_sqm < quantile(TOTAL_LAND_AREA_sqm, 0.25)) %>%
+  slice(which.max(`AVG. LAND AREA(sqm)`)) %>%
+  select(NEIGHBORHOOD, TOTAL_LAND_AREA_sqm, `AVG. LAND AREA(sqm)`)
+small_neighborhood <- small_high_plot$NEIGHBORHOOD
+small_total_area <- small_high_plot$TOTAL_LAND_AREA_sqm
+small_avg_area <- small_high_plot$`AVG. LAND AREA(sqm)`
+
+# 8. Mid-range Balanced Development
+mid_range <- df %>%
+  filter(between(TOTAL_LAND_AREA_sqm, quantile(TOTAL_LAND_AREA_sqm, 0.25), quantile(TOTAL_LAND_AREA_sqm, 0.75)),
+         between(`No. of Properties`, quantile(`No. of Properties`, 0.25), quantile(`No. of Properties`, 0.75))) %>%
+  slice(1:2) %>%
+  select(NEIGHBORHOOD)
+mid_neighborhood_1 <- mid_range$NEIGHBORHOOD[1]
+mid_neighborhood_2 <- mid_range$NEIGHBORHOOD[2]
+
+# 9. Opportunity Zones
+opportunity_zones <- df %>%
+  filter(`NO. OF VACANT LAND` > median(`NO. OF VACANT LAND`),
+         `No. of Properties` > median(`No. of Properties`)) %>%
+  arrange(desc(`NO. OF VACANT LAND`)) %>%
+  slice(1:3) %>%
+  select(NEIGHBORHOOD)
+opp_zone_1 <- opportunity_zones$NEIGHBORHOOD[1]
+opp_zone_2 <- opportunity_zones$NEIGHBORHOOD[2]
+opp_zone_3 <- opportunity_zones$NEIGHBORHOOD[3 %in% seq_len(nrow(opportunity_zones))] %||% "None"
+opp_zone_3 <- opp_zone_3[3]
+# 10. Urban Planning Insight (uses variables from previous points)
+high_density_zone <- df %>%
+  slice(which.max(`No. of Properties`)) %>%
+  select(NEIGHBORHOOD)
+high_density_neighborhood <- high_density_zone$NEIGHBORHOOD
+low_density_1 <- df %>%
+  arrange(desc(`AVG. LAND AREA(sqm)`)) %>%
+  slice(1) %>%
+  select(NEIGHBORHOOD)
+low_density_neighborhood_1 <- low_density_1$NEIGHBORHOOD
+low_density_2 <- df %>%
+  arrange(desc(`AVG. LAND AREA(sqm)`)) %>%
+  slice(2) %>%
+  select(NEIGHBORHOOD)
+low_density_neighborhood_2 <- low_density_2$NEIGHBORHOOD
+
+# Display the datatable
+datatable(df)
+```
+
+## Reports {.tabset}
+
+### Report-1
+
+Here is a meaningful analysis of the data presented in the table:
+
+1. Highest Total Land Area:   **`r max_neighborhood`** has the largest total land area at  **`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm, significantly higher than other neighborhoods, indicating its dominance in spatial coverage.
+
+2. Highest Average Land Area per Property:   **`r first_neighborhood`** and **`r second_neighborhood`** top the chart with the highest average land area per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm respectively), suggesting larger plot sizes, possibly for more upscale or less densely developed residential areas.
+
+3. Most Properties and Density: Despite having a smaller total area than **`r max_neighborhood`**, **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), indicating a higher density and smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",")`**sqm)..
+
+4. Vacant Land Availability: **`r vacant_neighborhood`** also leads in the number of vacant lands (**`r format(vacant_count, big.mark = ",")`**), suggesting potential for further development or future real estate opportunities.
+
+5. Least Developed Area: **`r least_prop_neighborhood`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant lands, implying it is either fully developed, highly exclusive, or underdeveloped.
+
+6. Compact Neighborhoods with Large Plots: **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** both show high average land areas (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) despite having relatively small total land areas, suggesting spacious, low-density developments.
+
+7. Smaller Neighborhood with High Plot Size: **`r small_neighborhood`** is notable for its small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but a high average land size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), indicating fewer but larger properties.
+
+8. Mid-range Balanced Development: **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** fall into a middle ground, with balanced figures across land area, number of properties, and vacant plots, indicating stable, moderately dense development.
+
+9. Opportunity Zones: **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** may offer the best opportunities for real estate development or investment due to their combination of high vacant land count and property numbers.
+
+10. Urban Planning Insight: The data reflects a clear variation in urban planning, from high-density zones like **`r high_density_neighborhood`** to low-density luxury areas like **`r low_density_neighborhood_2`** and **`r low_density_neighborhood_1`**. This has implications for infrastructure, zoning, and investment strategies.
+
+### Report-2
+1.	 **`r max_neighborhood`** has the most land area, with (**`r format(max_area, big.mark = ",", scientific = FALSE)`**)square meters. That’s a lot more than any other neighborhood, showing it covers a much bigger space.
+
+2.	 **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average plot sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). This means homes there likely have more space and the areas are less crowded.
+
+3. **`r prop_neighborhood`** has the most properties (**`r format(prop_count, big.mark = ",")`**sqm), even though its total area is smaller than **`r max_neighborhood`**. This shows it’s more crowded, with smaller average plot sizes of (**`r format(prop_avg_area, big.mark = ",")`**sqm).
+
+4.	**`r vacant_neighborhood`**  has the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), which means there’s good potential for future development or real estate investment.
+
+5.  **`r least_prop_neighborhood`** has the least development, with only (**`r format(least_prop_count, big.mark = ",")`**) properties and (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots. This could mean it's fully built, very exclusive, or still underdeveloped.
+
+6.  **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have large average plot sizes(**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) even though their total land areas are small, which suggests they are spacious and not very crowded neighborhoods.
+
+7.	 **`r small_neighborhood`** stands out for having a small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but a large average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning it has fewer but bigger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** are in the middle, with balanced land area, property numbers, and vacant plots, showing steady and moderately dense development.
+
+9.	 **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** offer great opportunities for real estate development or investment because they have both many properties and a high number of vacant lands.
+ 
+10.	The data shows clear differences in urban planning, with high-density areas like **`r high_density_neighborhood`** and low-density, luxury neighborhoods like **`r low_density_neighborhood_2`** and **`r low_density_neighborhood_1`**. This affects decisions on infrastructure,zoning, and investment.
+
+### Report-3
+
+1.With (**`r format(max_area, big.mark = ",", scientific = FALSE)`**)square meters, **`r max_neighborhood`** has the largest land area, much more than any other neighborhood, showing it covers the most space.
+
+2.**`r first_neighborhood`** and **`r second_neighborhood`** have the biggest plots on average (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`**sqm)so houses there have more space and the areas aren’t very crowded.
+
+3.**`r prop_neighborhood`** has the most houses (**`r format(prop_count, big.mark = ",")`**sqm), even though it’s smaller than  **`r max_neighborhood`**, which means it’s more crowded with smaller plot sizes of (**`r format(prop_avg_area, big.mark = ",")`**sqm).
+
+4.With (**`r format(vacant_count, big.mark = ",")`**) vacant plots, **`r vacant_neighborhood`** has the highest number, showing strong potential for future development or real estate investment. 
+
+5.**`r least_prop_neighborhood`** has the lowest development, with just(**`r format(least_prop_count, big.mark = ",")`**) properties and (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, which might mean it's fully built, highly exclusive, or not yet fully developed.
+
+6.Even with smaller total land areas, **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** stand out for their large average plot sizes (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm), making them spacious and less crowded places to live.
+
+7.**`r small_neighborhood`** is notable for its small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) paired with a large average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), which means it has fewer but larger properties.
+
+8.**`r mid_neighborhood_1`** and **`r mid_neighborhood_2`**  fall in the middle range, with balanced land area, number of properties, and vacant plots, reflecting steady and moderately dense development.
+
+9.**`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** present strong real estate development and investment opportunities due to their high numbers of both properties and vacant land.
+
+10.The data highlights distinct urban planning styles, from densely packed areas like **`r high_density_neighborhood`** to spacious, upscale neighborhoods like  **`r low_density_neighborhood_2`** and **`r low_density_neighborhood_1`**, influencing infrastructure, zoning, and investment choices.
+
+### Report-4
+
+1. **`r max_neighborhood`** is the largest neighborhood by far, covering  (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—way bigger than the others.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average home plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`**sqm), meaning houses there are more spacious and the areas are less packed.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**sqm) but a smaller total area, making it more crowded with smaller plots (**`r format(prop_avg_area, big.mark = ",")`**sqm).
+
+4.	**`r vacant_neighborhood`** also has the most empty plots (**`r format(vacant_count, big.mark = ",")`**) , making it a hotspot for future development or real estate deals.
+
+5.	**`r least_prop_neighborhood`** has very few properties (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots—either it’s already fully built, super exclusive, or just underdeveloped.
+
+6. Even though **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** don’t cover much land, their big plot sizes (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) mean they’re roomy and not densely packed.
+
+7. **`r small_neighborhood`** is unique—small in size but with huge plots (avg. **`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), so it has fewer but larger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** are middle-ground—balanced in size, property count, and vacant plots, showing steady, moderate development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are great for real estate investment since they have lots of existing properties and plenty of vacant land for new projects.
+
+10. The data reveals different planning strategies: crowded areas like **`r high_density_neighborhood`** vs. spacious, high-end ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which impacts infrastructure and investment choices.
+
+### Report-5
+
+1. **`r max_neighborhood`** is the largest neighborhood by far, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—way bigger than the others.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average home plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning houses there are more spacious and the areas are less packed.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), but a smaller total area, making it more crowded with smaller plots (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. **`r vacant_neighborhood`** also has the most empty plots (**`r format(vacant_count, big.mark = ",")`**), making it a hotspot for future development or real estate deals.
+
+5. **`r least_prop_neighborhood`** has very few properties (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots—either it’s already fully built, super exclusive, or just underdeveloped.
+
+6. Even though **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** don’t cover much land, their big plot sizes (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) mean they’re roomy and not densely packed.
+
+7. **`r small_neighborhood`** is unique—small in size but with huge plots (avg. **`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), so it has fewer but larger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** are middle-ground—balanced in size, property count, and vacant plots, showing steady, moderate development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are great for real estate investment since they have lots of existing properties and plenty of vacant land for new projects.
+
+10. The data reveals different planning strategies: crowded areas like **`r high_density_neighborhood`** vs. spacious, high-end ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which impacts infrastructure and investment choices.
+
+### Report-6
+
+1. **`r max_neighborhood`** stands out as the largest neighborhood by a significant margin, covering nearly (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters. This vast area dwarfs other neighborhoods, making it a key region in terms of spatial coverage.
+
+2.  **`r first_neighborhood`** and **`r second_neighborhood`** feature the largest average home plots, around (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) square meters respectively. These large plot sizes suggest homes there are more spacious and the areas less densely populated.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), but a relatively smaller total land area. This indicates a denser neighborhood with smaller individual plot sizes average of (**`r format(prop_avg_area, big.mark = ",")`** sqm), pointing to a more crowded urban layout.
+
+4. **`r vacant_neighborhood`** also boasts the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), positioning it as a hotspot for future development and real estate investment opportunities.
+
+5. **`r least_prop_neighborhood`** has very few properties (**`r format(least_prop_count, big.mark = ",")`**) and just (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, which could imply it is either fully built-up, exclusive, or underdeveloped with limited growth space.
+
+6. Despite their small total land coverage, **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** remain roomy due to large average plot sizes, creating neighborhoods that are less crowded and more upscale.
+
+7. **`r small_neighborhood`** is unique as a small-sized neighborhood with very large plots avg (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), resulting in fewer but more luxurious properties.
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** fall in the middle range, showing balanced land area, property counts, and vacant plots, reflecting steady and moderate development.
+
+9. Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are attractive for real estate investment, given their many existing properties and significant vacant land available for new projects.
+
+10. The data highlights contrasting urban planning approaches: from crowded, densely built neighborhoods like **`r high_density_neighborhood`** to spacious, high-end residential areas like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. These differences directly impact infrastructure requirements and investment strategies.
+
+### Report-7
+
+1. **`r max_neighborhood`**  stands out as the largest neighborhood, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—significantly more than any other area, highlighting its vast land coverage.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the largest average home plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) respectively—indicating more spacious houses and less densely packed neighborhoods.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), but a smaller total land area, resulting in a more densely populated neighborhood with smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. **`r vacant_neighborhood`** also has the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), making it a prime location for future development and real estate opportunities.
+
+5. With only (**`r format(least_prop_count, big.mark = ",")`**) properties and just (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, **`r least_prop_neighborhood`** appears either fully developed, highly exclusive, or possibly underutilized.
+
+6. Although **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`**  don't span a large area, their large plot sizes make them spacious and less densely populated.
+
+7. **`r small_neighborhood`**  is unique—despite its small size, it features large average plot sizes (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), resulting in fewer but more spacious properties.
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** strike a balance in land area, property count, and vacant plots, reflecting steady and moderate development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** offer strong real estate investment potential, with a combination of numerous existing properties and ample vacant land for future development.
+
+10. The data highlights contrasting planning strategies: densely packed neighborhoods like **`r high_density_neighborhood`**  versus spacious, upscale areas like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which influence infrastructure needs and investment decisions.
+
+### Report-8
+
+1. **`r max_neighborhood`**  is the largest neighborhood, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—much bigger than any other area.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average home plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning houses there are more spacious and less crowded.
+
+3. **`r prop_neighborhood`** has the most properties (**`r format(prop_count, big.mark = ",")`**) but a smaller total land area, making it denser with smaller average plots  (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. **`r vacant_neighborhood`** has the highest number of empty plots (**`r format(vacant_count, big.mark = ",")`**), making it a great spot for future development.
+
+5.  **`r least_prop_neighborhood`** has very few properties (**`r format(least_prop_count, big.mark = ",")`**) and vacant plots (**`r format(least_vacant_count, big.mark = ",")`**), showing it might be fully built, very exclusive, or underdeveloped.
+
+6. Although **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** are small in area, their large plot sizes make them roomy and less crowded.
+
+7. **`r small_neighborhood`** is unique—small in size but with large average plots (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), so it has fewer but bigger properties.
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** are balanced in size, number of properties, and vacant plots, showing steady and moderate growth.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are great for real estate investment, with many properties and plenty of empty land for new projects.
+
+10. The data shows two planning styles: crowded neighborhoods like **`r high_density_neighborhood`** versus spacious, upscale ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which affect infrastructure and investment decisions.
+
+### Report-9
+
+1. **`r max_neighborhood`**  is the largest area, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—far bigger than any other neighborhood.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average plot sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning homes there are more spacious and the neighborhoods feel less crowded.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), but less total space, which makes it a packed area with smaller individual plots (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. **`r vacant_neighborhood`** has the most vacant plots (**`r format(vacant_count, big.mark = ",")`**), showing strong potential for new construction and future growth.
+
+5. **`r least_prop_neighborhood`** has very few homes (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) empty plots. It might already be fully developed, exclusive, or just not used much yet.
+
+6. Even though **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** aren’t very large, their big plots mean fewer homes and a more open feel.
+
+7. **`r small_neighborhood`** is a small area with very large plot sizes (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), so it has fewer but much bigger houses.
+ 
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** are well-balanced—they have a fair share of land, properties, and vacant plots, showing steady and moderate development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are ideal for real estate investment because they already have many houses and still offer lots of space for future projects.
+
+10. The data shows two clear types of planning: dense areas like **`r high_density_neighborhood`**, and wide, luxurious ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which affect how people live and where developers might focus next.
+
+### Report-10
+
+1. **`r max_neighborhood`** emerges as the most expansive neighborhood, spanning an impressive (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm) . This substantial land coverage places it well above all other neighborhoods in terms of physical size and potential capacity for residential or commercial development.
+
+2. When it comes to average plot sizes, **`r first_neighborhood`** and **`r second_neighborhood`** lead the way, offering significantly larger plots at (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), respectively. These figures suggest that properties in these areas enjoy more spacious surroundings, contributing to a more open, less congested neighborhood environment.
+
+3. **`r prop_neighborhood`** stands out with the highest total number of properties (**`r format(prop_count, big.mark = ",")`**), indicating a densely developed locality. However, this high property count exists within a relatively smaller total land area, resulting in significantly smaller individual plot sizes (**`r format(prop_avg_area, big.mark = ",")`** sqm), which makes the area feel more crowded and compact compared to others.
+
+4. With the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), **`r vacant_neighborhood`** presents a strong opportunity for urban expansion and real estate development. This surplus of undeveloped land offers potential for future construction and investment in both residential and infrastructure projects.
+
+5. On the other hand, **`r least_prop_neighborhood`** records a notably low number of existing properties (**`r format(least_prop_count, big.mark = ",")`**) and vacant plots (**`r format(least_vacant_count, big.mark = ",")`**), suggesting that the area is either already fully developed, reserved for exclusive use, or possibly underutilized in terms of urban planning and land use.
+
+6. Although **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** do not occupy extensive land areas, they compensate with remarkably large individual plot sizes. This spatial arrangement results in neighborhoods that, while physically small, offer a comfortable and open-living atmosphere due to fewer structures and more generous property spacing.
+
+7. **`r small_neighborhood`** is particularly unique in that it occupies a relatively small total area yet features exceptionally large average plot sizes (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm). This combination leads to a lower number of properties overall, but those that do exist are notably spacious, indicating a premium or low-density development strategy.
+
+8. The neighborhoods of **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** strike a harmonious balance across multiple factors, including land area, property count, and number of vacant plots. These areas reflect a model of steady, measured urban growth, with neither overcrowding nor underdevelopment.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** represent strategic zones for real estate investment. They feature a favorable combination of high property numbers and abundant undeveloped land, offering a dual advantage: an already thriving community alongside substantial room for new residential or commercial projects.
+
+10. The dataset reveals a sharp contrast in urban planning approaches across neighborhoods. On one end are densely packed areas like **`r high_density_neighborhood`**, where high property volumes and limited space define the landscape. On the other end are upscale, spacious regions such as **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, where larger plots and fewer properties create a luxurious, open environment. These differences directly influence infrastructure planning, real estate value, and long-term investment strategies.
+
+### Report-11
+1.	 **`r max_neighborhood`** has the most land area, with (**`r format(max_area, big.mark = ",", scientific = FALSE)`**)square meters. That’s a lot more than any other neighborhood, showing it covers a much bigger space.
+
+2.	 **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average plot sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). This means homes there likely have more space and the areas are less crowded.
+
+3. **`r prop_neighborhood`** has the most properties (**`r format(prop_count, big.mark = ",")`**sqm), even though its total area is smaller than **`r max_neighborhood`**. This shows it’s more crowded, with smaller average plot sizes of (**`r format(prop_avg_area, big.mark = ",")`**sqm).
+
+4.	**`r vacant_neighborhood`**  has the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), which means there’s good potential for future development or real estate investment.
+
+5.  **`r least_prop_neighborhood`** has the least development, with only (**`r format(least_prop_count, big.mark = ",")`**) properties and (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots. This could mean it's fully built, very exclusive, or still underdeveloped.
+
+6.  **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have large average plot sizes(**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) even though their total land areas are small, which suggests they are spacious and not very crowded neighborhoods.
+
+7.	 **`r small_neighborhood`** stands out for having a small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but a large average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning it has fewer but bigger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** are in the middle, with balanced land area, property numbers, and vacant plots, showing steady and moderately dense development.
+
+9.	 **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** offer great opportunities for real estate development or investment because they have both many properties and a high number of vacant lands.
+ 
+10.	The data shows clear differences in urban planning, with high-density areas like **`r high_density_neighborhood`** and low-density, luxury neighborhoods like **`r low_density_neighborhood_2`** and **`r low_density_neighborhood_1`**. This affects decisions on infrastructure,zoning, and investment.
+
+### Report-12
+🏞️ **`r max_neighborhood`** – Largest area (**`r format(max_area, big.mark = ",", scientific = FALSE)`**sqm) and most vacant plots (**`r format(vacant_count, big.mark = ",")`**) → ✅ High development potential.
+
+🏡 **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`**– Biggest average plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm)→ 🌿 Spacious, low-density areas.
+
+🏘️ **`r prop_neighborhood`** – Most properties (**`r format(prop_count, big.mark = ",")`**)  but small plots (**`r format(prop_avg_area, big.mark = ",")`** sqm)  → 🚶 Highly crowded.
+
+🚧 **`r least_prop_neighborhood`** – Only (**`r format(least_prop_count, big.mark = ",")`**) properties & (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots → May be exclusive or fully developed.
+
+⚖️ **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** – Moderate area, properties, and vacant land → 🔁 Balanced development.
+
+💼 Top investment zones – **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`**→ 📈 Ideal for real estate.
+
+🧭 Planning Insight – **`r prop_neighborhood`**  = dense 🏘️ | **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** = spacious 🌳 → 🛣️ Guides infrastructure & zoning.
+
+### Report-13
+
+1. **`r max_neighborhood`** has the biggest land area – (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm).
+
+2.  **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest home plots – (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). That means more space and fewer houses.
+
+3. **`r prop_neighborhood`** has the most houses – (**`r format(prop_count, big.mark = ",")`**), but small plots (**`r format(prop_avg_area, big.mark = ",")`** sqm), so it's more crowded.
+
+4. **`r vacant_neighborhood`** has the most empty plots –(**`r format(vacant_count, big.mark = ",")`**), good for new buildings or investment.
+
+5.  **`r least_prop_neighborhood`**  has only (**`r format(least_prop_count, big.mark = ",")`**) houses and (**`r format(least_vacant_count, big.mark = ",")`**) empty plots. It may be fully built, very private, or not developed yet.
+
+6. **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** are not crowded and have big plots, even though the total land is small.
+
+7. **`r small_neighborhood`**  has small total land (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), but each plot is very big (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** are in the middle – not too crowded, not too empty.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are good places for property investment – many houses and many empty plots.
+
+10.The data shows:Crowded areas like **`r high_density_neighborhood`**  Open, rich areas like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`** This helps in city planning and where to build next.
+
+### Report-14
+
+1. **`r max_neighborhood`** is the biggest area with the most land.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`**  have big home plots, so they feel open and less crowded.
+
+3. **`r prop_neighborhood`** has the most houses, but the plots are small, so it's more crowded.
+
+4. **`r max_neighborhood`** has the most empty plots, which is good for building or investing.
+
+5. **`r least_prop_neighborhood`** has very few houses and almost no empty land. It might be fully built or very private.
+
+6. **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** are small in size, but their homes are large and spread out.
+
+7. **`r small_neighborhood`** has few big houses on a small land area.
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** are in between — not too crowded, not too empty.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are good places for property investment.
+
+10.The areas are planned differently — some are crowded, others are spacious and quiet. This helps plan where to build or invest next.
+
+### Report-15
+
+1. Highest Total Land Area:
+**`r max_neighborhood`** holds the largest total land area, measuring (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm). This clearly marks it as the most expansive neighborhood in terms of land coverage.
+
+2. Highest Average Land Area per Property:
+**`r first_neighborhood`** and **`r second_neighborhood`** lead with the highest average land areas per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), indicating a preference for larger individual plots—often seen in upscale or less densely populated areas.
+
+3. Most Properties and Highest Density:
+Even with a smaller total area than **`r max_neighborhood`**, **`r prop_neighborhood`** stands out for having the most properties (**`r format(prop_count, big.mark = ",")`**), implying higher density and smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. Highest Vacant Land Availability:
+**`r vacant_neighborhood`** leads in vacant land count (**`r format(vacant_count, big.mark = ",")`**), suggesting potential for new development and future investment opportunities.
+
+5. Least Developed Neighborhood:
+**`r least_prop_neighborhood`** has the lowest property count (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, hinting at either full development, exclusivity, or underdevelopment.
+
+6. Compact but Spacious Neighborhoods:
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** demonstrate high average land sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) despite smaller total areas, indicating low-density, possibly luxury developments.
+
+7. Smaller Neighborhood with Large Plot Sizes:
+**`r small_neighborhood`** has a relatively small total area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but large average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), pointing to limited but spacious housing.
+
+8. Balanced Mid-Sized Development:
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** exhibit balanced characteristics across land size, number of properties, and vacant land, representing moderate-density and stable urban planning.
+
+9. Potential Opportunity Zones:
+**`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** combine high vacant land counts with a solid number of properties, making them strong candidates for future development or investment.
+
+10. Urban Planning Diversity:
+The overall data reflects diverse urban patterns—ranging from high-density areas like **`r high_density_neighborhood`** to low-density, high-end neighborhoods such as **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**—providing insights for zoning, infrastructure planning, and investment strategies.
+
+### Report-16
+1. Highest Total Land Area:
+**`r max_neighborhood`** boasts the largest total land area, measuring (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm). This establishes it as the most expansive neighborhood spatially.
+
+2. Most Properties and Highest Density:
+Despite a smaller total area than **`r max_neighborhood`**, **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), pointing to high density and smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+3. Highest Average Land Area per Property:
+**`r first_neighborhood`** and **`r second_neighborhood`** lead with the largest average property sizes ((**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting spacious layouts typically found in upscale or low-density neighborhoods.
+
+4. Compact but Spacious Neighborhoods:
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** feature high average land sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) despite smaller total areas, indicating luxury-style, low-density planning.
+
+5. Smaller Neighborhood with Large Plot Sizes:
+**`r small_neighborhood`** has a limited total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but high average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), highlighting exclusivity or low property counts.
+
+6. Balanced Mid-Sized Development:
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** represent moderate-density zones with balanced land area, property count, and vacant plots, reflecting stable and sustainable urban planning.
+
+7. Highest Vacant Land Availability:
+**`r vacant_neighborhood`** leads in vacant plot count (**`r format(vacant_count, big.mark = ",")`**), pointing to high development potential or underutilized land reserves.
+
+8. Least Developed Neighborhood:
+**`r least_prop_neighborhood`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, possibly indicating full occupancy, low accessibility, or a neglected zone.
+
+9. Potential Opportunity Zones:
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** offer prime potential for future development due to a combination of high vacant land and notable property counts.
+
+10. Urban Planning Diversity:
+Overall, the data reflects diverse planning—from dense hubs like **`r high_density_neighborhood`** to spacious, low-density luxury areas such as **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. These contrasts inform decisions in zoning, infrastructure, and investment focus.
+
+### Report-17
+
+1. Largest Total Land Area:
+**`r max_neighborhood`** has the most land overall, with (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm). It’s the biggest neighborhood in terms of size.
+
+2. Biggest Plot Sizes on Average:
+**`r first_neighborhood`** and **`r second_neighborhood`** have the largest average land per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning properties are more spacious here.
+
+3. Small Areas but Big Plots:
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have small total land areas but large plot sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). These are likely luxury neighborhoods.
+
+4. Small Neighborhood, Big Houses:
+**`r small_neighborhood`** covers a small area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), but each property is large (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+5. Most Properties, High Density:
+**`r prop_neighborhood`** has the most properties (**`r format(prop_count, big.mark = ",", scientific = FALSE)`** sqm), which means it’s densely populated with smaller plots (**`r format(prop_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+6. Balanced and Mid-Sized Areas:
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** have a good balance of land, properties, and vacant plots. They show steady and planned growth.
+
+7. Most Vacant Land:
+**`r vacant_neighborhood`** has the most empty plots (**`r format(vacant_count, big.mark = ",")`**), showing good potential for new development.
+
+8. Great for Investment:
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** have many properties and lots of vacant land — good spots for future real estate projects.
+
+9. Least Developed Area:
+**`r least_prop_neighborhood`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**) and very few vacant plots (**`r format(least_vacant_count, big.mark = ",")`**), meaning it might be fully developed or not developed much at all.
+
+10. Variety in Planning:
+Some areas like **`r high_density_neighborhood`** are packed and busy, while others like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`** are calm and spacious. This shows a wide range of urban planning styles across neighborhoods.
+
+### Report-18
+
+1. Most Properties, High Density:
+**`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",", scientific = FALSE)`** sqm), meaning it’s densely populated with smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+2. Largest Total Land Area:
+**`r max_neighborhood`** has the biggest land coverage, with (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm), making it the most expansive neighborhood by size.
+
+3. Biggest Plot Sizes on Average:
+**`r first_neighborhood`** and **`r second_neighborhood`** have the largest average land per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), common in upscale or low-density areas.
+
+4. Small Areas but Big Plots:
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have small overall land areas but large plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), showing luxury-style planning.
+
+5. Small Neighborhood, Big Houses:
+**`r small_neighborhood`** covers less land (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), but the plot size per house is large (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting exclusive development.
+
+6. Balanced and Mid-Sized Areas:
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** show a balance in land size, number of properties, and empty plots — indicating well-planned and moderate-density development.
+
+7. Most Vacant Land:
+**`r vacant_neighborhood`** has the highest number of empty plots (**`r format(vacant_count, big.mark = ",")`**), showing potential for future development.
+
+8. Great for Investment:
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** have both many properties and lots of vacant land — making them ideal for real estate investment.
+
+9. Least Developed Area:
+**`r least_prop_neighborhood`** has the lowest property count (**`r format(least_prop_count, big.mark = ",")`**)and(**`r format(least_vacant_count, big.mark = ",")`**), possibly meaning it’s either fully developed or underutilized.
+
+10. Urban Planning Variety:
+There’s a wide range in how neighborhoods are planned — from crowded areas like **`r high_density_neighborhood`** to calm, spacious ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. This helps in planning for zoning, roads, and future growth.
+
+### Report-19
+
+1. Most Properties, High Density
+**`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",", scientific = FALSE)`** sqm), meaning it’s densely populated with smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+2. Largest Total Land Area
+**`r max_neighborhood`** has the biggest land coverage, with(**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm), making it the most expansive neighborhood by size.
+
+3. Biggest Plot Sizes on Average
+**`r first_neighborhood`** and **`r second_neighborhood`** have the largest average land per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), common in upscale or low-density areas.
+
+4. Small Neighborhood, Big Houses
+**`r small_neighborhood`** covers less land (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), but the plot size per house is large (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting exclusive development.
+
+5. Small Areas but Big Plots
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have small overall land areas but large plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), showing luxury-style planning.
+
+6. Balanced and Mid-Sized Areas
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** show a balance in land size, number of properties, and empty plots — indicating well-planned and moderate-density development.
+
+7. Most Vacant Land
+**`r vacant_neighborhood`** has the highest number of empty plots (**`r format(vacant_count, big.mark = ",")`**), showing potential for future development.
+
+8. Great for Investment
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** have both many properties and lots of vacant land — making them ideal for real estate investment.
+
+9. Least Developed Area
+**`r least_prop_neighborhood`** has the lowest property count (**`r format(least_prop_count, big.mark = ",")`**)and(**`r format(least_vacant_count, big.mark = ",")`**), possibly meaning it’s either fully developed or underutilized.
+
+10. Urban Planning Variety
+There’s a wide range in how neighborhoods are planned — from crowded areas like **`r high_density_neighborhood`** to calm, spacious ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. This helps in planning for zoning, roads, and future growth.
+
+### Report-20
+
+1. Urban Planning Variety
+There’s a wide range in how neighborhoods are planned — from crowded areas like **`r high_density_neighborhood`** to calm, spacious ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. This diversity supports better zoning, road design, and future development.
+
+2. Most Properties, High Density
+**`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",", scientific = FALSE)`** sqm) indicating dense urban development with smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+3. Largest Total Land Area
+**`r max_neighborhood`** dominates in total land area, spanning (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm), making it the most expansive neighborhood by size.
+
+4. Biggest Plot Sizes on Average
+**`r first_neighborhood`** and **`r second_neighborhood`** have the highest average land per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), often seen in premium or low-density residential zones.
+
+5. Small Areas but Big Plots
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** feature limited overall land area, but boast large plot sizes(**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), reflecting a luxury-style layout.
+
+6. Small Neighborhood, Big Houses
+**`r small_neighborhood`** covers a smaller total area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), yet offers generously sized plots (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting exclusivity.
+
+7. Balanced and Mid-Sized Areas
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** strike a balance between land size, number of properties, and vacant plots — ideal examples of moderate-density, well-planned development.
+
+8. Most Vacant Land
+**`r vacant_neighborhood`** leads in the number of empty plots (**`r format(vacant_count, big.mark = ",")`**), offering strong potential for future expansion and urban planning.
+
+9. Great for Investment
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** combine a high number of properties with plenty of vacant plots — making them prime candidates for real estate investment.
+
+10. Least Developed Area
+**`r least_prop_neighborhood`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**)and(**`r format(least_vacant_count, big.mark = ",")`**), suggesting it is either fully developed or largely underutilized.
+
+
+
+
+
+
+
+# Government Properties 
+
+```{r,message=FALSE,warning=FALSE,echo=FALSE}
+library(dplyr)
+library(readr)
+library(DT)
+
+# Read the data
+df <- read_csv("~/7.Narration/0.Consolidate/Input/2.Government/governmental_properties_1749538166171.csv")
+
+# 1. Highest Total Land Area
+max_land_area <- df %>%
+  slice(which.max(TOTAL_LAND_AREA_sqm)) %>%
+  select(NEIGHBORHOOD, TOTAL_LAND_AREA_sqm)
+max_neighborhood <- max_land_area$NEIGHBORHOOD
+max_area <- max_land_area$TOTAL_LAND_AREA_sqm
+
+# 2. Highest Average Land Area per Property
+top_avg_land <- df %>%
+  arrange(desc(`AVG. LAND AREA(sqm)`)) %>%
+  slice(1:2) %>%
+  select(NEIGHBORHOOD, `AVG. LAND AREA(sqm)`)
+first_neighborhood <- top_avg_land$NEIGHBORHOOD[1]
+first_avg_area <- top_avg_land$`AVG. LAND AREA(sqm)`[1]
+second_neighborhood <- top_avg_land$NEIGHBORHOOD[2]
+second_avg_area <- top_avg_land$`AVG. LAND AREA(sqm)`[2]
+
+# 3. Most Properties
+max_properties <- df %>%
+  slice(which.max(`No. of Properties`)) %>%
+  select(NEIGHBORHOOD, `No. of Properties`, `AVG. LAND AREA(sqm)`)
+prop_neighborhood <- max_properties$NEIGHBORHOOD
+prop_count <- max_properties$`No. of Properties`
+prop_avg_area <- max_properties$`AVG. LAND AREA(sqm)`
+
+# 4. Most Vacant Land
+max_vacant <- df %>%
+  slice(which.max(`NO. OF VACANT LAND`)) %>%
+  select(NEIGHBORHOOD, `NO. OF VACANT LAND`)
+vacant_neighborhood <- max_vacant$NEIGHBORHOOD
+vacant_count <- max_vacant$`NO. OF VACANT LAND`
+
+# 5. Least Developed Area
+least_properties <- df %>%
+  slice(which.min(`No. of Properties`)) %>%
+  select(NEIGHBORHOOD, `No. of Properties`, `NO. OF VACANT LAND`)
+least_prop_neighborhood <- least_properties$NEIGHBORHOOD
+least_prop_count <- least_properties$`No. of Properties`
+least_vacant_count <- least_properties$`NO. OF VACANT LAND`
+
+# 6. Compact Neighborhoods with Large Plots
+compact_large_plots <- df %>%
+  filter(TOTAL_LAND_AREA_sqm < median(TOTAL_LAND_AREA_sqm)) %>%
+  arrange(desc(`AVG. LAND AREA(sqm)`)) %>%
+  slice(1:2) %>%
+  select(NEIGHBORHOOD, `AVG. LAND AREA(sqm)`)
+compact_neighborhood_1 <- compact_large_plots$NEIGHBORHOOD[1]
+compact_avg_area_1 <- compact_large_plots$`AVG. LAND AREA(sqm)`[1]
+compact_neighborhood_2 <- compact_large_plots$NEIGHBORHOOD[2]
+compact_avg_area_2 <- compact_large_plots$`AVG. LAND AREA(sqm)`[2]
+
+# 7. Smaller Neighborhood with High Plot Size
+small_high_plot <- df %>%
+  filter(TOTAL_LAND_AREA_sqm < quantile(TOTAL_LAND_AREA_sqm, 0.25)) %>%
+  slice(which.max(`AVG. LAND AREA(sqm)`)) %>%
+  select(NEIGHBORHOOD, TOTAL_LAND_AREA_sqm, `AVG. LAND AREA(sqm)`)
+small_neighborhood <- small_high_plot$NEIGHBORHOOD
+small_total_area <- small_high_plot$TOTAL_LAND_AREA_sqm
+small_avg_area <- small_high_plot$`AVG. LAND AREA(sqm)`
+
+# 8. Mid-range Balanced Development
+mid_range <- df %>%
+  filter(between(TOTAL_LAND_AREA_sqm, quantile(TOTAL_LAND_AREA_sqm, 0.25), quantile(TOTAL_LAND_AREA_sqm, 0.75)),
+         between(`No. of Properties`, quantile(`No. of Properties`, 0.25), quantile(`No. of Properties`, 0.75))) %>%
+  slice(1:2) %>%
+  select(NEIGHBORHOOD)
+mid_neighborhood_1 <- mid_range$NEIGHBORHOOD[1]
+mid_neighborhood_2 <- mid_range$NEIGHBORHOOD[2]
+
+# 9. Opportunity Zones
+opportunity_zones <- df %>%
+  filter(`NO. OF VACANT LAND` > median(`NO. OF VACANT LAND`),
+         `No. of Properties` > median(`No. of Properties`)) %>%
+  arrange(desc(`NO. OF VACANT LAND`)) %>%
+  slice(1:3) %>%
+  select(NEIGHBORHOOD)
+opp_zone_1 <- opportunity_zones$NEIGHBORHOOD[1]
+opp_zone_2 <- opportunity_zones$NEIGHBORHOOD[2]
+opp_zone_3 <- opportunity_zones$NEIGHBORHOOD[3 %in% seq_len(nrow(opportunity_zones))] %||% "None"
+opp_zone_3 <- opp_zone_3[3]
+# 10. Urban Planning Insight (uses variables from previous points)
+high_density_zone <- df %>%
+  slice(which.max(`No. of Properties`)) %>%
+  select(NEIGHBORHOOD)
+high_density_neighborhood <- high_density_zone$NEIGHBORHOOD
+low_density_1 <- df %>%
+  arrange(desc(`AVG. LAND AREA(sqm)`)) %>%
+  slice(1) %>%
+  select(NEIGHBORHOOD)
+low_density_neighborhood_1 <- low_density_1$NEIGHBORHOOD
+low_density_2 <- df %>%
+  arrange(desc(`AVG. LAND AREA(sqm)`)) %>%
+  slice(2) %>%
+  select(NEIGHBORHOOD)
+low_density_neighborhood_2 <- low_density_2$NEIGHBORHOOD
+
+# Display the datatable
+datatable(df)
+```
+
+
+## Reports {.tabset}
+
+### Report-1
+
+Here is a meaningful analysis of the data presented in the table:
+
+1. Highest Total Land Area:   **`r max_neighborhood`** has the largest total land area at  **`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm, significantly higher than other neighborhoods, indicating its dominance in spatial coverage.
+
+2. Highest Average Land Area per Property:   **`r first_neighborhood`** and **`r second_neighborhood`** top the chart with the highest average land area per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm respectively), suggesting larger plot sizes, possibly for more upscale or less densely developed residential areas.
+
+3. Most Properties and Density: Despite having a smaller total area than **`r max_neighborhood`**, **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), indicating a higher density and smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",")`**sqm)..
+
+4. Vacant Land Availability: **`r vacant_neighborhood`** also leads in the number of vacant lands (**`r format(vacant_count, big.mark = ",")`**), suggesting potential for further development or future real estate opportunities.
+
+5. Least Developed Area: **`r least_prop_neighborhood`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant lands, implying it is either fully developed, highly exclusive, or underdeveloped.
+
+6. Compact Neighborhoods with Large Plots: **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** both show high average land areas (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) despite having relatively small total land areas, suggesting spacious, low-density developments.
+
+7. Smaller Neighborhood with High Plot Size: **`r small_neighborhood`** is notable for its small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but a high average land size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), indicating fewer but larger properties.
+
+8. Mid-range Balanced Development: **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** fall into a middle ground, with balanced figures across land area, number of properties, and vacant plots, indicating stable, moderately dense development.
+
+9. Opportunity Zones: **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** may offer the best opportunities for real estate development or investment due to their combination of high vacant land count and property numbers.
+
+10. Urban Planning Insight: The data reflects a clear variation in urban planning, from high-density zones like **`r high_density_neighborhood`** to low-density luxury areas like **`r low_density_neighborhood_2`** and **`r low_density_neighborhood_1`**. This has implications for infrastructure, zoning, and investment strategies.
+
+### Report-2
+1. **`r max_neighborhood`** has the most land area, with (**`r format(max_area, big.mark = ",", scientific = FALSE)`**)square meters. That’s a lot more than any other neighborhood, showing it covers a much bigger space.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average plot sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). This means homes there likely have more space and the areas are less crowded.
+
+3. **`r prop_neighborhood`** has the most properties (**`r format(prop_count, big.mark = ",")`**sqm), even though its total area is smaller than **`r max_neighborhood`**. This shows it’s more crowded, with smaller average plot sizes of (**`r format(prop_avg_area, big.mark = ",")`**sqm).
+
+4. **`r vacant_neighborhood`**  has the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), which means there’s good potential for future development or real estate investment.
+
+5. **`r least_prop_neighborhood`** has the least development, with only (**`r format(least_prop_count, big.mark = ",")`**) properties and (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots. This could mean it's fully built, very exclusive, or still underdeveloped.
+
+6. **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have large average plot sizes(**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) even though their total land areas are small, which suggests they are spacious and not very crowded neighborhoods.
+
+7. **`r small_neighborhood`** stands out for having a small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but a large average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning it has fewer but bigger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** are in the middle, with balanced land area, property numbers, and vacant plots, showing steady and moderately dense development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** offer great opportunities for real estate development or investment because they have both many properties and a high number of vacant lands.
+ 
+10.	The data shows clear differences in urban planning, with high-density areas like **`r high_density_neighborhood`** and low-density, luxury neighborhoods like **`r low_density_neighborhood_2`** and **`r low_density_neighborhood_1`**. This affects decisions on infrastructure,zoning, and investment.
+
+### Report-3
+
+1. With (**`r format(max_area, big.mark = ",", scientific = FALSE)`**)square meters, **`r max_neighborhood`** has the largest land area, much more than any other neighborhood, showing it covers the most space.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest plots on average (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`**sqm)so houses there have more space and the areas aren’t very crowded.
+
+3. **`r prop_neighborhood`** has the most houses (**`r format(prop_count, big.mark = ",")`**sqm), even though it’s smaller than  **`r max_neighborhood`**, which means it’s more crowded with smaller plot sizes of (**`r format(prop_avg_area, big.mark = ",")`**sqm).
+
+4. With (**`r format(vacant_count, big.mark = ",")`**) vacant plots, **`r vacant_neighborhood`** has the highest number, showing strong potential for future development or real estate investment. 
+
+5. **`r least_prop_neighborhood`** has the lowest development, with just(**`r format(least_prop_count, big.mark = ",")`**) properties and (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, which might mean it's fully built, highly exclusive, or not yet fully developed.
+
+6. Even with smaller total land areas, **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** stand out for their large average plot sizes (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm), making them spacious and less crowded places to live.
+
+7. **`r small_neighborhood`** is notable for its small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) paired with a large average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), which means it has fewer but larger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`**  fall in the middle range, with balanced land area, number of properties, and vacant plots, reflecting steady and moderately dense development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** present strong real estate development and investment opportunities due to their high numbers of both properties and vacant land.
+
+10. The data highlights distinct urban planning styles, from densely packed areas like **`r high_density_neighborhood`** to spacious, upscale neighborhoods like  **`r low_density_neighborhood_2`** and **`r low_density_neighborhood_1`**, influencing infrastructure, zoning, and investment choices.
+
+### Report-4
+
+1. **`r max_neighborhood`** is the largest neighborhood by far, covering  (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—way bigger than the others.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average home plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`**sqm), meaning houses there are more spacious and the areas are less packed.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**sqm) but a smaller total area, making it more crowded with smaller plots (**`r format(prop_avg_area, big.mark = ",")`**sqm).
+
+4.	**`r vacant_neighborhood`** also has the most empty plots (**`r format(vacant_count, big.mark = ",")`**) , making it a hotspot for future development or real estate deals.
+
+5.	**`r least_prop_neighborhood`** has very few properties (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots—either it’s already fully built, super exclusive, or just underdeveloped.
+
+6. Even though **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** don’t cover much land, their big plot sizes (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) mean they’re roomy and not densely packed.
+
+7. **`r small_neighborhood`** is unique—small in size but with huge plots (avg. **`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), so it has fewer but larger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** are middle-ground—balanced in size, property count, and vacant plots, showing steady, moderate development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are great for real estate investment since they have lots of existing properties and plenty of vacant land for new projects.
+
+10. The data reveals different planning strategies: crowded areas like **`r high_density_neighborhood`** vs. spacious, high-end ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which impacts infrastructure and investment choices.
+
+### Report-5
+
+1. **`r max_neighborhood`** is the largest neighborhood by far, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—way bigger than the others.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average home plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning houses there are more spacious and the areas are less packed.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), but a smaller total area, making it more crowded with smaller plots (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. **`r vacant_neighborhood`** also has the most empty plots (**`r format(vacant_count, big.mark = ",")`**), making it a hotspot for future development or real estate deals.
+
+5. **`r least_prop_neighborhood`** has very few properties (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots—either it’s already fully built, super exclusive, or just underdeveloped.
+
+6. Even though **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** don’t cover much land, their big plot sizes (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) mean they’re roomy and not densely packed.
+
+7. **`r small_neighborhood`** is unique—small in size but with huge plots (avg. **`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), so it has fewer but larger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** are middle-ground—balanced in size, property count, and vacant plots, showing steady, moderate development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are great for real estate investment since they have lots of existing properties and plenty of vacant land for new projects.
+
+10. The data reveals different planning strategies: crowded areas like **`r high_density_neighborhood`** vs. spacious, high-end ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which impacts infrastructure and investment choices.
+
+### Report-6
+
+1. **`r max_neighborhood`** stands out as the largest neighborhood by a significant margin, covering nearly (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters. This vast area dwarfs other neighborhoods, making it a key region in terms of spatial coverage.
+
+2.  **`r first_neighborhood`** and **`r second_neighborhood`** feature the largest average home plots, around (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) square meters respectively. These large plot sizes suggest homes there are more spacious and the areas less densely populated.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), but a relatively smaller total land area. This indicates a denser neighborhood with smaller individual plot sizes average of (**`r format(prop_avg_area, big.mark = ",")`** sqm), pointing to a more crowded urban layout.
+
+4. **`r vacant_neighborhood`** also boasts the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), positioning it as a hotspot for future development and real estate investment opportunities.
+
+5. **`r least_prop_neighborhood`** has very few properties (**`r format(least_prop_count, big.mark = ",")`**) and just (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, which could imply it is either fully built-up, exclusive, or underdeveloped with limited growth space.
+
+6. Despite their small total land coverage, **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** remain roomy due to large average plot sizes, creating neighborhoods that are less crowded and more upscale.
+
+7. **`r small_neighborhood`** is unique as a small-sized neighborhood with very large plots avg (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), resulting in fewer but more luxurious properties.
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** fall in the middle range, showing balanced land area, property counts, and vacant plots, reflecting steady and moderate development.
+
+9. Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are attractive for real estate investment, given their many existing properties and significant vacant land available for new projects.
+
+10. The data highlights contrasting urban planning approaches: from crowded, densely built neighborhoods like **`r high_density_neighborhood`** to spacious, high-end residential areas like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. These differences directly impact infrastructure requirements and investment strategies.
+
+### Report-7
+
+1. **`r max_neighborhood`**  stands out as the largest neighborhood, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—significantly more than any other area, highlighting its vast land coverage.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the largest average home plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) respectively—indicating more spacious houses and less densely packed neighborhoods.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), but a smaller total land area, resulting in a more densely populated neighborhood with smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. **`r vacant_neighborhood`** also has the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), making it a prime location for future development and real estate opportunities.
+
+5. With only (**`r format(least_prop_count, big.mark = ",")`**) properties and just (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, **`r least_prop_neighborhood`** appears either fully developed, highly exclusive, or possibly underutilized.
+
+6. Although **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`**  don't span a large area, their large plot sizes make them spacious and less densely populated.
+
+7. **`r small_neighborhood`**  is unique—despite its small size, it features large average plot sizes (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), resulting in fewer but more spacious properties.
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** strike a balance in land area, property count, and vacant plots, reflecting steady and moderate development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** offer strong real estate investment potential, with a combination of numerous existing properties and ample vacant land for future development.
+
+10. The data highlights contrasting planning strategies: densely packed neighborhoods like **`r high_density_neighborhood`**  versus spacious, upscale areas like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which influence infrastructure needs and investment decisions.
+
+### Report-8
+
+1. **`r max_neighborhood`**  is the largest neighborhood, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—much bigger than any other area.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average home plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning houses there are more spacious and less crowded.
+
+3. **`r prop_neighborhood`** has the most properties (**`r format(prop_count, big.mark = ",")`**) but a smaller total land area, making it denser with smaller average plots  (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. **`r vacant_neighborhood`** has the highest number of empty plots (**`r format(vacant_count, big.mark = ",")`**), making it a great spot for future development.
+
+5.  **`r least_prop_neighborhood`** has very few properties (**`r format(least_prop_count, big.mark = ",")`**) and vacant plots (**`r format(least_vacant_count, big.mark = ",")`**), showing it might be fully built, very exclusive, or underdeveloped.
+
+6. Although **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** are small in area, their large plot sizes make them roomy and less crowded.
+
+7. **`r small_neighborhood`** is unique—small in size but with large average plots (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), so it has fewer but bigger properties.
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** are balanced in size, number of properties, and vacant plots, showing steady and moderate growth.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are great for real estate investment, with many properties and plenty of empty land for new projects.
+
+10. The data shows two planning styles: crowded neighborhoods like **`r high_density_neighborhood`** versus spacious, upscale ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which affect infrastructure and investment decisions.
+
+### Report-9
+
+1. **`r max_neighborhood`**  is the largest area, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`**) square meters—far bigger than any other neighborhood.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average plot sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning homes there are more spacious and the neighborhoods feel less crowded.
+
+3. **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), but less total space, which makes it a packed area with smaller individual plots (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. **`r vacant_neighborhood`** has the most vacant plots (**`r format(vacant_count, big.mark = ",")`**), showing strong potential for new construction and future growth.
+
+5. **`r least_prop_neighborhood`** has very few homes (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) empty plots. It might already be fully developed, exclusive, or just not used much yet.
+
+6. Even though **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** aren’t very large, their big plots mean fewer homes and a more open feel.
+
+7. **`r small_neighborhood`** is a small area with very large plot sizes (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), so it has fewer but much bigger houses.
+ 
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** are well-balanced—they have a fair share of land, properties, and vacant plots, showing steady and moderate development.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are ideal for real estate investment because they already have many houses and still offer lots of space for future projects.
+
+10. The data shows two clear types of planning: dense areas like **`r high_density_neighborhood`**, and wide, luxurious ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, which affect how people live and where developers might focus next.
+
+### Report-10
+
+1. **`r max_neighborhood`** emerges as the most expansive neighborhood, spanning an impressive (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm) . This substantial land coverage places it well above all other neighborhoods in terms of physical size and potential capacity for residential or commercial development.
+
+2. When it comes to average plot sizes, **`r first_neighborhood`** and **`r second_neighborhood`** lead the way, offering significantly larger plots at (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), respectively. These figures suggest that properties in these areas enjoy more spacious surroundings, contributing to a more open, less congested neighborhood environment.
+
+3. **`r prop_neighborhood`** stands out with the highest total number of properties (**`r format(prop_count, big.mark = ",")`**), indicating a densely developed locality. However, this high property count exists within a relatively smaller total land area, resulting in significantly smaller individual plot sizes (**`r format(prop_avg_area, big.mark = ",")`** sqm), which makes the area feel more crowded and compact compared to others.
+
+4. With the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), **`r vacant_neighborhood`** presents a strong opportunity for urban expansion and real estate development. This surplus of undeveloped land offers potential for future construction and investment in both residential and infrastructure projects.
+
+5. On the other hand, **`r least_prop_neighborhood`** records a notably low number of existing properties (**`r format(least_prop_count, big.mark = ",")`**) and vacant plots (**`r format(least_vacant_count, big.mark = ",")`**), suggesting that the area is either already fully developed, reserved for exclusive use, or possibly underutilized in terms of urban planning and land use.
+
+6. Although **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** do not occupy extensive land areas, they compensate with remarkably large individual plot sizes. This spatial arrangement results in neighborhoods that, while physically small, offer a comfortable and open-living atmosphere due to fewer structures and more generous property spacing.
+
+7. **`r small_neighborhood`** is particularly unique in that it occupies a relatively small total area yet features exceptionally large average plot sizes (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm). This combination leads to a lower number of properties overall, but those that do exist are notably spacious, indicating a premium or low-density development strategy.
+
+8. The neighborhoods of **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** strike a harmonious balance across multiple factors, including land area, property count, and number of vacant plots. These areas reflect a model of steady, measured urban growth, with neither overcrowding nor underdevelopment.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** represent strategic zones for real estate investment. They feature a favorable combination of high property numbers and abundant undeveloped land, offering a dual advantage: an already thriving community alongside substantial room for new residential or commercial projects.
+
+10. The dataset reveals a sharp contrast in urban planning approaches across neighborhoods. On one end are densely packed areas like **`r high_density_neighborhood`**, where high property volumes and limited space define the landscape. On the other end are upscale, spacious regions such as **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**, where larger plots and fewer properties create a luxurious, open environment. These differences directly influence infrastructure planning, real estate value, and long-term investment strategies.
+
+### Report-11
+1.	 **`r max_neighborhood`** has the most land area, with (**`r format(max_area, big.mark = ",", scientific = FALSE)`**)square meters. That’s a lot more than any other neighborhood, showing it covers a much bigger space.
+
+2.	 **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest average plot sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). This means homes there likely have more space and the areas are less crowded.
+
+3. **`r prop_neighborhood`** has the most properties (**`r format(prop_count, big.mark = ",")`**sqm), even though its total area is smaller than **`r max_neighborhood`**. This shows it’s more crowded, with smaller average plot sizes of (**`r format(prop_avg_area, big.mark = ",")`**sqm).
+
+4.	**`r vacant_neighborhood`**  has the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**), which means there’s good potential for future development or real estate investment.
+
+5.  **`r least_prop_neighborhood`** has the least development, with only (**`r format(least_prop_count, big.mark = ",")`**) properties and (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots. This could mean it's fully built, very exclusive, or still underdeveloped.
+
+6.  **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have large average plot sizes(**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and **`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) even though their total land areas are small, which suggests they are spacious and not very crowded neighborhoods.
+
+7.	 **`r small_neighborhood`** stands out for having a small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but a large average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning it has fewer but bigger properties.
+
+8. **`r mid_neighborhood_1`** and **`r mid_neighborhood_2`** are in the middle, with balanced land area, property numbers, and vacant plots, showing steady and moderately dense development.
+
+9.	 **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** offer great opportunities for real estate development or investment because they have both many properties and a high number of vacant lands.
+ 
+10.	The data shows clear differences in urban planning, with high-density areas like **`r high_density_neighborhood`** and low-density, luxury neighborhoods like **`r low_density_neighborhood_2`** and **`r low_density_neighborhood_1`**. This affects decisions on infrastructure,zoning, and investment.
+
+### Report-12
+🏞️ **`r max_neighborhood`** – Largest area (**`r format(max_area, big.mark = ",", scientific = FALSE)`**sqm) and most vacant plots (**`r format(vacant_count, big.mark = ",")`**) → ✅ High development potential.
+
+🏡 **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`**– Biggest average plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm)→ 🌿 Spacious, low-density areas.
+
+🏘️ **`r prop_neighborhood`** – Most properties (**`r format(prop_count, big.mark = ",")`**)  but small plots (**`r format(prop_avg_area, big.mark = ",")`** sqm)  → 🚶 Highly crowded.
+
+🚧 **`r least_prop_neighborhood`** – Only (**`r format(least_prop_count, big.mark = ",")`**) properties & (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots → May be exclusive or fully developed.
+
+⚖️ **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** – Moderate area, properties, and vacant land → 🔁 Balanced development.
+
+💼 Top investment zones – **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`**→ 📈 Ideal for real estate.
+
+🧭 Planning Insight – **`r prop_neighborhood`**  = dense 🏘️ | **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** = spacious 🌳 → 🛣️ Guides infrastructure & zoning.
+
+### Report-13
+
+1. **`r max_neighborhood`** has the biggest land area – (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm).
+
+2.  **`r first_neighborhood`** and **`r second_neighborhood`** have the biggest home plots – (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). That means more space and fewer houses.
+
+3. **`r prop_neighborhood`** has the most houses – (**`r format(prop_count, big.mark = ",")`**), but small plots (**`r format(prop_avg_area, big.mark = ",")`** sqm), so it's more crowded.
+
+4. **`r vacant_neighborhood`** has the most empty plots –(**`r format(vacant_count, big.mark = ",")`**), good for new buildings or investment.
+
+5.  **`r least_prop_neighborhood`**  has only (**`r format(least_prop_count, big.mark = ",")`**) houses and (**`r format(least_vacant_count, big.mark = ",")`**) empty plots. It may be fully built, very private, or not developed yet.
+
+6. **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** are not crowded and have big plots, even though the total land is small.
+
+7. **`r small_neighborhood`**  has small total land (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), but each plot is very big (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** are in the middle – not too crowded, not too empty.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are good places for property investment – many houses and many empty plots.
+
+10.The data shows:Crowded areas like **`r high_density_neighborhood`**  Open, rich areas like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`** This helps in city planning and where to build next.
+
+### Report-14
+
+1. **`r max_neighborhood`** is the biggest area with the most land.
+
+2. **`r first_neighborhood`** and **`r second_neighborhood`**  have big home plots, so they feel open and less crowded.
+
+3. **`r prop_neighborhood`** has the most houses, but the plots are small, so it's more crowded.
+
+4. **`r max_neighborhood`** has the most empty plots, which is good for building or investing.
+
+5. **`r least_prop_neighborhood`** has very few houses and almost no empty land. It might be fully built or very private.
+
+6. **`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** are small in size, but their homes are large and spread out.
+
+7. **`r small_neighborhood`** has few big houses on a small land area.
+
+8. **`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** are in between — not too crowded, not too empty.
+
+9. **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** are good places for property investment.
+
+10.The areas are planned differently — some are crowded, others are spacious and quiet. This helps plan where to build or invest next.
+
+### Report-15
+
+1. Highest Total Land Area:
+**`r max_neighborhood`** holds the largest total land area, measuring (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm). This clearly marks it as the most expansive neighborhood in terms of land coverage.
+
+2. Highest Average Land Area per Property:
+**`r first_neighborhood`** and **`r second_neighborhood`** lead with the highest average land areas per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), indicating a preference for larger individual plots—often seen in upscale or less densely populated areas.
+
+3. Most Properties and Highest Density:
+Even with a smaller total area than **`r max_neighborhood`**, **`r prop_neighborhood`** stands out for having the most properties (**`r format(prop_count, big.mark = ",")`**), implying higher density and smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+4. Highest Vacant Land Availability:
+**`r vacant_neighborhood`** leads in vacant land count (**`r format(vacant_count, big.mark = ",")`**), suggesting potential for new development and future investment opportunities.
+
+5. Least Developed Neighborhood:
+**`r least_prop_neighborhood`** has the lowest property count (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, hinting at either full development, exclusivity, or underdevelopment.
+
+6. Compact but Spacious Neighborhoods:
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** demonstrate high average land sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) despite smaller total areas, indicating low-density, possibly luxury developments.
+
+7. Smaller Neighborhood with Large Plot Sizes:
+**`r small_neighborhood`** has a relatively small total area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but large average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), pointing to limited but spacious housing.
+
+8. Balanced Mid-Sized Development:
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** exhibit balanced characteristics across land size, number of properties, and vacant land, representing moderate-density and stable urban planning.
+
+9. Potential Opportunity Zones:
+**`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** combine high vacant land counts with a solid number of properties, making them strong candidates for future development or investment.
+
+10. Urban Planning Diversity:
+The overall data reflects diverse urban patterns—ranging from high-density areas like **`r high_density_neighborhood`** to low-density, high-end neighborhoods such as **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**—providing insights for zoning, infrastructure planning, and investment strategies.
+
+### Report-16
+1. Highest Total Land Area:
+**`r max_neighborhood`** boasts the largest total land area, measuring (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm). This establishes it as the most expansive neighborhood spatially.
+
+2. Most Properties and Highest Density:
+Despite a smaller total area than **`r max_neighborhood`**, **`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**), pointing to high density and smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",")`** sqm).
+
+3. Highest Average Land Area per Property:
+**`r first_neighborhood`** and **`r second_neighborhood`** lead with the largest average property sizes ((**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting spacious layouts typically found in upscale or low-density neighborhoods.
+
+4. Compact but Spacious Neighborhoods:
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** feature high average land sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) despite smaller total areas, indicating luxury-style, low-density planning.
+
+5. Smaller Neighborhood with Large Plot Sizes:
+**`r small_neighborhood`** has a limited total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) but high average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), highlighting exclusivity or low property counts.
+
+6. Balanced Mid-Sized Development:
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** represent moderate-density zones with balanced land area, property count, and vacant plots, reflecting stable and sustainable urban planning.
+
+7. Highest Vacant Land Availability:
+**`r vacant_neighborhood`** leads in vacant plot count (**`r format(vacant_count, big.mark = ",")`**), pointing to high development potential or underutilized land reserves.
+
+8. Least Developed Neighborhood:
+**`r least_prop_neighborhood`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**) and only (**`r format(least_vacant_count, big.mark = ",")`**) vacant plots, possibly indicating full occupancy, low accessibility, or a neglected zone.
+
+9. Potential Opportunity Zones:
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** offer prime potential for future development due to a combination of high vacant land and notable property counts.
+
+10. Urban Planning Diversity:
+Overall, the data reflects diverse planning—from dense hubs like **`r high_density_neighborhood`** to spacious, low-density luxury areas such as **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. These contrasts inform decisions in zoning, infrastructure, and investment focus.
+
+### Report-17
+
+1. Largest Total Land Area:
+**`r max_neighborhood`** has the most land overall, with (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm). It’s the biggest neighborhood in terms of size.
+
+2. Biggest Plot Sizes on Average:
+**`r first_neighborhood`** and **`r second_neighborhood`** have the largest average land per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), meaning properties are more spacious here.
+
+3. Small Areas but Big Plots:
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have small total land areas but large plot sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). These are likely luxury neighborhoods.
+
+4. Small Neighborhood, Big Houses:
+**`r small_neighborhood`** covers a small area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), but each property is large (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+5. Most Properties, High Density:
+**`r prop_neighborhood`** has the most properties (**`r format(prop_count, big.mark = ",", scientific = FALSE)`** sqm), which means it’s densely populated with smaller plots (**`r format(prop_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+6. Balanced and Mid-Sized Areas:
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** have a good balance of land, properties, and vacant plots. They show steady and planned growth.
+
+7. Most Vacant Land:
+**`r vacant_neighborhood`** has the most empty plots (**`r format(vacant_count, big.mark = ",")`**), showing good potential for new development.
+
+8. Great for Investment:
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** have many properties and lots of vacant land — good spots for future real estate projects.
+
+9. Least Developed Area:
+**`r least_prop_neighborhood`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**) and very few vacant plots (**`r format(least_vacant_count, big.mark = ",")`**), meaning it might be fully developed or not developed much at all.
+
+10. Variety in Planning:
+Some areas like **`r high_density_neighborhood`** are packed and busy, while others like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`** are calm and spacious. This shows a wide range of urban planning styles across neighborhoods.
+
+### Report-18
+
+1. Most Properties, High Density:
+**`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",", scientific = FALSE)`** sqm), meaning it’s densely populated with smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+2. Largest Total Land Area:
+**`r max_neighborhood`** has the biggest land coverage, with (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm), making it the most expansive neighborhood by size.
+
+3. Biggest Plot Sizes on Average:
+**`r first_neighborhood`** and **`r second_neighborhood`** have the largest average land per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), common in upscale or low-density areas.
+
+4. Small Areas but Big Plots:
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have small overall land areas but large plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), showing luxury-style planning.
+
+5. Small Neighborhood, Big Houses:
+**`r small_neighborhood`** covers less land (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), but the plot size per house is large (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting exclusive development.
+
+6. Balanced and Mid-Sized Areas:
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** show a balance in land size, number of properties, and empty plots — indicating well-planned and moderate-density development.
+
+7. Most Vacant Land:
+**`r vacant_neighborhood`** has the highest number of empty plots (**`r format(vacant_count, big.mark = ",")`**), showing potential for future development.
+
+8. Great for Investment:
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** have both many properties and lots of vacant land — making them ideal for real estate investment.
+
+9. Least Developed Area:
+**`r least_prop_neighborhood`** has the lowest property count (**`r format(least_prop_count, big.mark = ",")`**)and(**`r format(least_vacant_count, big.mark = ",")`**), possibly meaning it’s either fully developed or underutilized.
+
+10. Urban Planning Variety:
+There’s a wide range in how neighborhoods are planned — from crowded areas like **`r high_density_neighborhood`** to calm, spacious ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. This helps in planning for zoning, roads, and future growth.
+
+### Report-19
+
+1. Most Properties, High Density
+**`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",", scientific = FALSE)`** sqm), meaning it’s densely populated with smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+2. Largest Total Land Area
+**`r max_neighborhood`** has the biggest land coverage, with(**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm), making it the most expansive neighborhood by size.
+
+3. Biggest Plot Sizes on Average
+**`r first_neighborhood`** and **`r second_neighborhood`** have the largest average land per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), common in upscale or low-density areas.
+
+4. Small Neighborhood, Big Houses
+**`r small_neighborhood`** covers less land (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), but the plot size per house is large (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting exclusive development.
+
+5. Small Areas but Big Plots
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** have small overall land areas but large plots (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), showing luxury-style planning.
+
+6. Balanced and Mid-Sized Areas
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** show a balance in land size, number of properties, and empty plots — indicating well-planned and moderate-density development.
+
+7. Most Vacant Land
+**`r vacant_neighborhood`** has the highest number of empty plots (**`r format(vacant_count, big.mark = ",")`**), showing potential for future development.
+
+8. Great for Investment
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** have both many properties and lots of vacant land — making them ideal for real estate investment.
+
+9. Least Developed Area
+**`r least_prop_neighborhood`** has the lowest property count (**`r format(least_prop_count, big.mark = ",")`**)and(**`r format(least_vacant_count, big.mark = ",")`**), possibly meaning it’s either fully developed or underutilized.
+
+10. Urban Planning Variety
+There’s a wide range in how neighborhoods are planned — from crowded areas like **`r high_density_neighborhood`** to calm, spacious ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. This helps in planning for zoning, roads, and future growth.
+
+### Report-20
+
+1. Urban Planning Variety
+There’s a wide range in how neighborhoods are planned — from crowded areas like **`r high_density_neighborhood`** to calm, spacious ones like **`r low_density_neighborhood_1`** and **`r low_density_neighborhood_2`**. This diversity supports better zoning, road design, and future development.
+
+2. Most Properties, High Density
+**`r prop_neighborhood`** has the highest number of properties (**`r format(prop_count, big.mark = ",", scientific = FALSE)`** sqm) indicating dense urban development with smaller average plot sizes (**`r format(prop_avg_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+3. Largest Total Land Area
+**`r max_neighborhood`** dominates in total land area, spanning (**`r format(max_area, big.mark = ",", scientific = FALSE)`**spm), making it the most expansive neighborhood by size.
+
+4. Biggest Plot Sizes on Average
+**`r first_neighborhood`** and **`r second_neighborhood`** have the highest average land per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), often seen in premium or low-density residential zones.
+
+5. Small Areas but Big Plots
+**`r compact_neighborhood_1`** and **`r compact_neighborhood_2`** feature limited overall land area, but boast large plot sizes(**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), reflecting a luxury-style layout.
+
+6. Small Neighborhood, Big Houses
+**`r small_neighborhood`** covers a smaller total area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), yet offers generously sized plots (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting exclusivity.
+
+7. Balanced and Mid-Sized Areas
+**`r mid_neighborhood_1`**  and  **`r mid_neighborhood_2`** strike a balance between land size, number of properties, and vacant plots — ideal examples of moderate-density, well-planned development.
+
+8. Most Vacant Land
+**`r vacant_neighborhood`** leads in the number of empty plots (**`r format(vacant_count, big.mark = ",")`**), offering strong potential for future expansion and urban planning.
+
+9. Great for Investment
+Neighborhoods like **`r opp_zone_1`**, **`r opp_zone_2`**, and **`r opp_zone_3`** combine a high number of properties with plenty of vacant plots — making them prime candidates for real estate investment.
+
+10. Least Developed Area
+**`r least_prop_neighborhood`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**)and(**`r format(least_vacant_count, big.mark = ",")`**), suggesting it is either fully developed or largely underutilized.
+
+
+# Projects
+
+```{r,echo=FALSE,warning-FALSE}
+library(dplyr)
+library(readr)
+library(DT)
+library(openxlsx)
+# Create the dataframe
+df <- read.xlsx("~/7.Narration/0.Consolidate/Input/3.Projects/projects.xlsx")
+colnames(df)[colnames(df)=="PROJECT.NAME"] <- "PROJECT NAME"
+colnames(df)[colnames(df)=="TOTAL.LAND.AREA.(sqm)"] <- "TOTAL LAND AREA (sqm)"
+colnames(df)[colnames(df)=="AVG..LAND.AREA.(sqm)"] <- "AVG. LAND AREA (sqm)"
+colnames(df)[colnames(df)=="NO..OF.PROPERTIES"] <- "NO. OF PROPERTIES"
+colnames(df)[colnames(df)=="NO.OF.PLOTS"] <- "NO OF PLOTS"
+# colnames(df)[colnames(df)=="PROJECT.NAME"] <- "PROJECT NAME"
+
+# 1. Highest Total Land Area
+max_land_area <- df %>%
+  slice(which.max(`TOTAL LAND AREA (sqm)`)) %>%
+  select(`PROJECT NAME`, `TOTAL LAND AREA (sqm)`)
+max_project <- max_land_area$`PROJECT NAME`
+max_area <- max_land_area$`TOTAL LAND AREA (sqm)`
+
+# 2. Highest Average Land Area per Property
+top_avg_land <- df %>%
+  arrange(desc(`AVG. LAND AREA (sqm)`)) %>%
+  slice(1:2) %>%
+  select(`PROJECT NAME`, `AVG. LAND AREA (sqm)`)
+first_project <- top_avg_land$`PROJECT NAME`[1]
+first_avg_area <- top_avg_land$`AVG. LAND AREA (sqm)`[1]
+second_project <- top_avg_land$`PROJECT NAME`[2]
+second_avg_area <- top_avg_land$`AVG. LAND AREA (sqm)`[2]
+
+# 3. Most Properties
+max_properties <- df %>%
+  slice(which.max(`NO. OF PROPERTIES`)) %>%
+  select(`PROJECT NAME`, `NO. OF PROPERTIES`, `AVG. LAND AREA (sqm)`)
+prop_project <- max_properties$`PROJECT NAME`
+prop_count <- max_properties$`NO. OF PROPERTIES`
+prop_avg_area <- max_properties$`AVG. LAND AREA (sqm)`
+
+# 4. Most Vacant Plots
+max_vacant <- df %>%
+  slice(which.max(`NO OF PLOTS`)) %>%
+  select(`PROJECT NAME`, `NO OF PLOTS`)
+vacant_project <- max_vacant$`PROJECT NAME`
+vacant_count <- max_vacant$`NO OF PLOTS`
+
+# 5. Least Developed Area
+least_properties <- df %>%
+  slice(which.min(`NO. OF PROPERTIES`)) %>%
+  select(`PROJECT NAME`, `NO. OF PROPERTIES`, `NO OF PLOTS`)
+least_prop_project <- least_properties$`PROJECT NAME`
+least_prop_count <- least_properties$`NO. OF PROPERTIES`
+least_vacant_count <- least_properties$`NO OF PLOTS`
+
+# 6. Compact Projects with Large Plots
+compact_large_plots <- df %>%
+  filter(`TOTAL LAND AREA (sqm)` < median(`TOTAL LAND AREA (sqm)`)) %>%
+  arrange(desc(`AVG. LAND AREA (sqm)`)) %>%
+  slice(1:2) %>%
+  select(`PROJECT NAME`, `AVG. LAND AREA (sqm)`)
+compact_project_1 <- compact_large_plots$`PROJECT NAME`[1]
+compact_avg_area_1 <- compact_large_plots$`AVG. LAND AREA (sqm)`[1]
+compact_project_2 <- compact_large_plots$`PROJECT NAME`[2]
+compact_avg_area_2 <- compact_large_plots$`AVG. LAND AREA (sqm)`[2]
+
+# 7. Smaller Project with High Plot Size
+small_high_plot <- df %>%
+  filter(`TOTAL LAND AREA (sqm)` < quantile(`TOTAL LAND AREA (sqm)`, 0.25)) %>%
+  slice(which.max(`AVG. LAND AREA (sqm)`)) %>%
+  select(`PROJECT NAME`, `TOTAL LAND AREA (sqm)`, `AVG. LAND AREA (sqm)`)
+small_project <- small_high_plot$`PROJECT NAME`
+small_total_area <- small_high_plot$`TOTAL LAND AREA (sqm)`
+small_avg_area <- small_high_plot$`AVG. LAND AREA (sqm)`
+
+# 8. Mid-range Balanced Development
+mid_range <- df %>%
+  filter(between(`TOTAL LAND AREA (sqm)`, quantile(`TOTAL LAND AREA (sqm)`, 0.25), quantile(`TOTAL LAND AREA (sqm)`, 0.75)),
+         between(`NO. OF PROPERTIES`, quantile(`NO. OF PROPERTIES`, 0.25), quantile(`NO. OF PROPERTIES`, 0.75))) %>%
+  slice(1:2) %>%
+  select(`PROJECT NAME`)
+mid_project_1 <- mid_range$`PROJECT NAME`[1]
+mid_project_2 <- mid_range$`PROJECT NAME`[2 %in% seq_len(nrow(mid_range))] %||% "None"
+
+# 9. Opportunity Zones
+opportunity_zones <- df %>%
+  filter(`NO OF PLOTS` > median(`NO OF PLOTS`),
+         `NO. OF PROPERTIES` > median(`NO. OF PROPERTIES`)) %>%
+  arrange(desc(`NO OF PLOTS`)) %>%
+  slice(1:3) %>%
+  select(`PROJECT NAME`)
+opp_zone_1 <- opportunity_zones$`PROJECT NAME`[1]
+opp_zone_2 <- opportunity_zones$`PROJECT NAME`[2 %in% seq_len(nrow(opportunity_zones))] %||% "None"
+opp_zone_3 <- opportunity_zones$`PROJECT NAME`[3 %in% seq_len(nrow(opportunity_zones))] %||% "None"
+
+# 10. Urban Planning Insight
+high_density_zone <- df %>%
+  slice(which.max(`NO. OF PROPERTIES`)) %>%
+  select(`PROJECT NAME`)
+high_density_project <- high_density_zone$`PROJECT NAME`
+low_density_1 <- df %>%
+  arrange(desc(`AVG. LAND AREA (sqm)`)) %>%
+  slice(1) %>%
+  select(`PROJECT NAME`)
+low_density_project_1 <- low_density_1$`PROJECT NAME`
+low_density_2 <- df %>%
+  arrange(desc(`AVG. LAND AREA (sqm)`)) %>%
+  slice(2) %>%
+  select(`PROJECT NAME`)
+low_density_project_2 <- low_density_2$`PROJECT NAME`
+
+# Display the datatable
+datatable(df)
+```
+
+## Reports {.tabset}
+
+### Report-1
+Here is a comprehensive analysis of the real estate data for projects in Riyadh:
+
+ 1.Highest Total Land Area **`r max_project`** dominates with a total land area of (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm), far surpassing other projects, indicating its extensive spatial coverage in Riyadh.
+
+2.Highest Average Land Area per Property: **`r first_project`** and **`r second_project`** lead with the highest average land areas per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). These figures suggest spacious, potentially upscale developments with larger individual plots.
+
+3.Most Properties and Density: Despite having a significantly smaller total area than **`r max_project`**,**`r prop_project`** boasts the highest number of properties (**`r format(prop_count, big.mark = ",")`**), with an average plot size of (**`r format(prop_avg_area, big.mark = ",")`** sqm). This indicates a high-density development with smaller, more compact plots.
+
+4.Vacant Plot Availability: **`r vacant_project`** stands out with the highest number of vacant plots (**`r format(vacant_count, big.mark = ",")`**spm), signaling substantial potential for future development or real estate investment opportunities.
+
+5.Least Developed Area: **`r least_prop_project`** has the fewest properties (**`r format(least_prop_count, big.mark = ",")`**) and no vacant plots (**`r format(least_vacant_count, big.mark = ",")`**). This could imply a highly exclusive project, full development, or limited growth potential.
+
+6.Compact Projects with Large Plots: **`r compact_project_1`** and **`r compact_project_2`** exhibit large average plot sizes (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm and (**`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) despite smaller total land areas. These projects likely prioritize spacious, low-density layouts.
+
+7.Smaller Project with High Plot Size:**`r small_project`** is notable for its small total land area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) yet a high average plot size (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), indicating a focus on fewer but larger properties.
+
+8.Mid-range Balanced Development: **`r mid_project_1`** and **`r mid_project_2`** represent balanced development, with moderate total land areas and property counts, suggesting stable, well-planned projects suitable for consistent growth.
+
+9.Opportunity Zones: **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** are prime candidates for real estate investment due to their high number of properties and vacant plots, offering opportunities for expansion.
+
+10.Urban Planning Insight: The data highlights diverse urban planning approaches, from the high-density **`r high_density_project`** to low-density, spacious projects like **`r low_density_project_1`** and **`r low_density_project_2`**. These variations inform zoning, infrastructure, and investment strategies in Riyadh.
+
+### Report-2
+
+1.**`r max_project`** has the largest land area at (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm), much bigger than other projects in Riyadh.
+
+2.**`r first_project`** and **`r second_project`** have the highest average land area per property—(**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), respectively—indicating large, possibly upscale developments.
+
+3.While **`r max_project`** covers the largest area, **`r prop_project`** has the most properties (**`r format(prop_count, big.mark = ",")`**), with an average plot size of (**`r format(prop_avg_area, big.mark = ",")`** ) sqm—indicating a high-density development with compact plots.
+
+4.**`r vacant_project`** has the most vacant plots (**`r format(vacant_count, big.mark = ",")`**spm), indicating strong potential for future development or investment.
+
+5.**`r least_prop_project`** has only (**`r format(least_prop_count, big.mark = ",")`**) properties and zero vacant plots, suggesting either an exclusive development or limited expansion opportunities.
+
+6.**`r compact_project_1`** and **`r compact_project_2`** feature large average plots (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm), suggesting spacious, low-density designs despite their smaller footprints.
+
+7.Despite its modest total area (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm), **`r small_project`** features large average plots (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), suggesting a premium, low-density development.
+
+8.**`r mid_project_1`** and **`r mid_project_2`** show balanced development - moderate in both size and property count, indicating stable, sustainable growth potential.
+
+9.**`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** emerge as top investment targets, combining high property counts with available vacant land - ideal for developers seeking expansion-ready opportunities.
+
+10.Urban Planning Insight:Riyadh’s urban landscape showcases a strategic mix of high- and low-density developments, from compact projects like 
+**`r high_density_project`** to sprawling initiatives such as **`r low_density_project_1`** and **`r low_density_project_2`**. This diversity directly informs zoning policies, infrastructure scalability, and targeted investments—ensuring adaptive growth for the city’s future.
+
+
+### Report-3
+
+1.**`r max_project`** covers the most land (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm) in Riyadh, far exceeding other projects.
+
+2.With average land areas of (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) per property, **`r first_project`** and **`r second_project`** likely feature spacious, high-end developments.
+
+3.**`r prop_project`** has the highest number of properties (**`r format(prop_count, big.mark = ",")`**) but the smallest average plot size (**`r format(prop_avg_area, big.mark = ",")`** ), making it a high-density project compared to larger developments like r max_project.
+
+4.With (**`r format(vacant_count, big.mark = ",")`**spm) vacant plots, **`r vacant_project`** offers major opportunities for new development or real estate investment.
+
+5.With just (**`r format(least_prop_count, big.mark = ",")`**) properties and no available plots, **`r least_prop_project`** appears to be either fully developed or highly exclusive.
+
+6.Despite limited total space, **`r compact_project_1`** (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm) and **`r compact_project_2`** (**`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) offer unusually large plots—likely favoring low-density layouts.
+
+7.**`r small_project`** stands out by packing fewer but larger properties (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm) into its compact (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm)footprint.
+
+8.With neither extremely large nor small footprints, **`r mid_project_1`** and **`r mid_project_2`** demonstrate careful planning through their moderate scale and property density - ideal for steady community development.
+
+9.Developers should prioritize **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** - these zones combine established communities with vacant land parcels, creating ready-to-execute expansion opportunities.
+
+10.Riyadh has both crowded areas **`r high_density_project`** and open spaces **`r low_density_project_1`** and **`r low_density_project_2`**. This mix helps the city plan better for buildings, roads, and services.
+
+### Report-4
+
+1.(**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm), **`r max_project`** is the largest project in Riyadh by land area—significantly bigger than other developments.
+
+2.**`r first_project`** and **`r second_project`** average (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) per property respectively - suggesting these projects feature premium, low-density developments.
+
+3.**`r prop_project`** packs in the most homes (**`r format(prop_count, big.mark = ",")`**) on the smallest land (**`r format(prop_avg_area, big.mark = ",")`** )—unlike spacious projects like **`r max_project`**.
+
+4.**`r vacant_project`** has r format(**`r format(vacant_count, big.mark = ",")`**spm) vacant plots—prime for development or investment.
+
+5.**`r least_prop_project`** (just (**`r format(least_prop_count, big.mark = ",")`**) units, no plots left) suggests either full development or elite status.
+
+6.**`r compact_project_1`** and **`r compact_project_2`** have big plots (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) despite limited space—probably low-density projects.
+
+7.**`r small_project`** fits fewer, bigger properties (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm) each in its small (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) area.
+
+8.**`r mid_project_1`** and **`r mid_project_2`** showcase optimal mid-scale planning, with neither excessive sprawl nor high density - creating ideal conditions for sustainable community growth.
+
+9.Build now in:**`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`**(Existing neighborhoods + available land).
+
+10.Riyadh has both tight **`r high_density_project`** and spread-out **`r low_density_project_1`** and **`r low_density_project_2`** areas - good for city planning.
+
+### Report-5
+
+
+1.**`r max_project`** is the largest project in Riyadh by land area, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm)—far bigger than any other development.
+
+2.**`r first_project`** and **`r second_project`** have large average property sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), showing they are premium, low-density projects.
+
+3.**`r prop_project`** has the most homes (**`r format(prop_count, big.mark = ",")`**) packed into just (**`r format(prop_avg_area, big.mark = ",")`** ) properties, making it a high-density project—unlike more spacious developments.
+
+4.**`r vacant_project`** has vacant plots averaging (**`r format(vacant_count, big.mark = ",")`**spm)—great for development or investment.
+
+5.**`r least_prop_project`** has only **`r format(least_prop_count, big.mark = ",")`** unit and no plots left, which suggests it’s either fully developed or a high-end project.
+
+6.**`r compact_project_1`** and **`r compact_project_2`** have large plots (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm), likely making them low-density projects.
+
+7.**`r small_project`** fits fewer, bigger properties (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm) each in its small (**`r format(small_total_area, big.mark = ",", scientific = FALSE)`** sqm) area.
+
+8.**`r mid_project_2`**, with **`r mid_project_1`** units, shows balanced mid-scale planning—neither too dense nor too spread out—supporting sustainable community growth.
+
+9.Good places to build now are **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** Elite Plan—they have existing neighborhoods and land available.
+
+10.Riyadh has both crowded and spacious areas, like **`r high_density_project`** and **`r low_density_project_1`** and **`r low_density_project_2`**, which helps with better city planning.
+
+
+### Report-6
+
+1. **`r max_project`** is the largest project in Riyadh by land area, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm)—far bigger than any other development.
+
+2. **`r first_project`** and **`r second_project`** feature large average property sizes of (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) respectively, indicating that they are premium, low-density developments.
+
+3. **`r prop_project`** contains the highest number of homes (**`r format(prop_count, big.mark = ",")`**) within only (**`r format(prop_avg_area, big.mark = ",")`** )properties, classifying it as a high-density project compared to more spacious developments.
+
+4. **`r vacant_project`** has vacant plots averaging (**`r format(vacant_count, big.mark = ",")`**spm), making them well-suited for future development or investment opportunities.
+
+5. **`r least_prop_project`** comprises a **`r format(least_prop_count, big.mark = ",")`** unit with no remaining plots, indicating that the project is either fully developed or intended as a high-end, exclusive development.
+
+6. **`r compact_project_1`** and **`r compact_project_2`** feature large plot sizes of (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm) respectively, suggesting that they are low-density developments.
+
+7. **`r small_project`** consists of fewer, larger properties, each averaging (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), within a relatively small overall area, indicating a low-density development.
+
+8. **`r mid_project_2`**, has **`r mid_project_1`** units and shows good planning—not too crowded or too spread out—making it suitable for healthy community growth.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** are prime locations for new development, offering a combination of established neighborhoods and available land for construction.
+
+10. Riyadh features a mix of high-density and low-density areas, such as **`r high_density_project`**, **`r low_density_project_1`** and **`r low_density_project_2`**, supporting more effective and balanced urban planning.
+
+### Report-7
+
+1. **`r max_project`** is the biggest project in Riyadh, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm)—much larger than any other.
+
+2. **`r first_project`** and **`r second_project`** have large average property sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), showing they are premium, low-density projects.
+
+3. **`r prop_project`** has the most homes (**`r format(prop_count, big.mark = ",")`**) packed into just (**`r format(prop_avg_area, big.mark = ",")`** ) properties, making it a high-density project.
+
+4. **`r vacant_project`** has vacant plots averaging (**`r format(vacant_count, big.mark = ",")`**spm)—great for development or investment.
+
+5. **`r least_prop_project`** has only **`r format(least_prop_count, big.mark = ",")`** unit and no plots left, suggesting it's either fully developed or a high-end project.
+
+6. **`r compact_project_1`** and **`r compact_project_2`** have large plots (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm), meaning they are likely low-density.
+
+7. **`r small_project`** has fewer, larger properties averaging (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), making it a low-density project.
+ 
+8. **`r mid_project_2`**, has **`r mid_project_1`** units, is well-planned—not too dense or too spread out—good for community living.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** are great places to build, with existing communities and available land.
+
+10. Riyadh has both dense and spacious areas, like **`r high_density_project`**,  **`r low_density_project_1`** and **`r low_density_project_2`**, which supports balanced city planning.
+
+### Report-8
+
+1. **`r max_project`** is the biggest project in Riyadh, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm)—much larger than any other.
+
+2. **`r first_project`** and **`r second_project`** have big average property sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), showing they are premium, low-density projects.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** also have large plots (**`r format(compact_avg_area_1, big.mark = ",", scientific = FALSE)`** sqm) and (**`r format(compact_avg_area_2, big.mark = ",", scientific = FALSE)`** sqm), so they are likely low-density too.
+
+4. **`r small_project`** has fewer but bigger properties averaging (**`r format(small_avg_area, big.mark = ",", scientific = FALSE)`** sqm), which also makes it low-density.
+
+5. **`r prop_project`** has the most homes (**`r format(prop_count, big.mark = ",")`**) packed into just (**`r format(prop_avg_area, big.mark = ",")`** ) properties—making it a high-density project.
+
+6. **`r mid_project_2`**, has **`r mid_project_1`** units, is well-balanced—not too crowded or too spread out—good for community living.
+
+7. **`r least_prop_project`** has only **`r format(least_prop_count, big.mark = ",")`** unit and no plots left. This means it's either fully built or meant to be high-end.
+
+8. **`r vacant_project`** has empty plots averaging (**`r format(vacant_count, big.mark = ",")`**spm)—good for building or investing.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** are great places to build now, with ready neighborhoods and land available.
+
+10. Riyadh has both crowded and spacious areas, like **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**, which helps with better city planning.
+
+### Report-9
+
+1. **`r max_project`** is the biggest project in Riyadh with a huge land area (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+2. **`r first_project`** and **`r second_project`** have large average property sizes, showing they are premium and less crowded.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** also have big plots, so they’re likely low-density.
+
+4. **`r small_project`** has fewer but larger properties, making it a low-density area too.
+
+5. **`r prop_project`** has the most homes in smaller spaces, making it a crowded, high-density area.
+
+6. **`r mid_project_2`** has **`r mid_project_1`** units is balanced—not too crowded or too empty.
+
+7. **`r least_prop_project`** has just **`r format(least_prop_count, big.mark = ",")`** unit and no plots left—it’s either fully built or very high-end.
+
+8. **`r vacant_project`** has many empty plots (**`r format(vacant_count, big.mark = ",")`**spm), great for building or investing.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** are good places to build now—they’re ready and have land available.
+
+10. Riyadh has a mix of crowded and open areas like **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**, which helps with smart city planning.
+
+### Report-10
+
+1. **`r max_project`** is the largest development in Riyadh, with a total land area of (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm). It is significantly bigger than any other project in the city.
+
+2. **`r first_project`** and **`r second_project`** have large average property sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), indicating that these are premium, low-density developments designed for spacious living.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** also feature large plot sizes, suggesting they maintain a low-density layout that prioritizes open space and privacy.
+
+4. **`r small_project`** contains fewer but larger homes, with each property having a high average land area. This makes it another example of a low-density residential project.
+
+5. In contrast, **`r prop_project`** has the highest number of homes (**`r format(prop_count, big.mark = ",")`**) squeezed into fewer properties (**`r format(prop_avg_area, big.mark = ",")`** ), making it a high-density area with limited space per unit.
+
+6. **`r mid_project_2`** which includes **`r mid_project_1`** units, represents balanced development. It avoids extremes of overcrowding or excess space, supporting a sustainable and livable community.
+
+7. **`r least_prop_project`** has just (**`r format(vacant_count, big.mark = ",")`**spm) unit and no plots remaining, implying that it is either fully built-out or designed as an exclusive, high-end area.
+
+8. **`r vacant_project`** has a high number of vacant plots with an average size of (**`r format(vacant_count, big.mark = ",")`**spm). These plots present excellent opportunities for future development or investment.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** are ideal zones for new construction, as they already have existing neighborhoods along with available land for expansion.
+
+10. Overall, Riyadh includes both densely populated areas and more spacious developments—such as **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**—providing a diverse urban layout that supports flexible and efficient city planning.
+
+### Report-11
+
+1. **`r max_project`** is the biggest project in Riyadh, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm)—much larger than any other.
+
+2. **`r first_project`** and **`r second_project`** have big average property sizes, showing they are premium, low-density areas.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** also have large plots, so they’re likely low-density too.
+
+4. **`r small_project`** has fewer, bigger homes—another low-density development.
+
+5. **`r prop_project`** has the most homes in less space, making it a crowded, high-density area.
+
+6. **`r mid_project_2`** with **`r mid_project_1`** units is well-balanced—not too packed or too empty.
+
+7. **`r least_prop_project`** has just one unit and no plots left—it's either fully built or very exclusive.
+
+8. **`r vacant_project`** has many empty plots (**`r format(vacant_count, big.mark = ",")`**spm), great for future development or investment.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** are great spots to build—they already have communities and land ready.
+
+10. Riyadh has both crowded and spacious areas, like **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**, which helps in smart city planning.
+
+### Report-12
+
+1. **`r max_project`** stands as the largest development in Riyadh, covering a total land area of (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm). Its scale significantly exceeds that of any other project in the region, highlighting its importance in the city’s urban landscape.
+
+2. **`r first_project`** and **`r second_project`** feature large average land areas per property (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). These large lot sizes indicate low-density layouts typically associated with premium, high-value developments designed for comfort and privacy.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** also show large average plot sizes. Despite being part of more compact zones, the generous land per property suggests a focus on space and exclusivity—characteristics aligned with low-density, high-end planning.
+
+4. **`r small_project`** contains a limited number of properties, each occupying a relatively large area. This setup reflects a low-density design approach that prioritizes open space, likely aimed at delivering higher living standards or targeted investment appeal.
+
+5. On the other hand, **`r prop_project`** hosts the highest number of residential units (**`r format(prop_count, big.mark = ",")`**) packed into a limited number of plots (**`r format(prop_avg_area, big.mark = ",")`** ). This density makes it a high-density residential area—efficient for housing supply but with less open space per household.
+
+6. **`r mid_project_2`** with **`r mid_project_1`** units, represents a balanced urban development. It avoids extremes—neither overly dense nor wastefully spaced—making it well-suited for sustainable community growth and everyday living convenience.
+
+7. **`r least_prop_project`** comprises only one unit with no plots remaining, indicating it is either fully developed or designed to be an ultra-exclusive project. The lack of expansion potential also supports its classification as a luxury or fully utilized development.
+
+8. **`r vacant_project`** has a notable number of vacant plots, each averaging (**`r format(vacant_count, big.mark = ",")`**spm). This suggests strong opportunities for future construction, whether for residential, commercial, or mixed-use purposes.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`**, and **`r opp_zone_3`** are identified as highly suitable for upcoming development projects. These zones already include developed neighborhoods and have land available, making them strategic locations for expansion or investment.
+
+10. Riyadh’s urban fabric includes a mix of high-density and low-density projects—like **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**. This diversity supports more adaptive and balanced city planning, accommodating both population growth and quality of life.
+
+### Report-13
+
+1. **`r max_project`** is the largest development in Riyadh, encompassing a total land area of (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm). Its expansive scale significantly surpasses that of all other projects in the city, underscoring its strategic significance in Riyadh’s urban landscape.
+
+2. **`r first_project`** and **`r second_project`** exhibit notably large average land areas per property—(**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm) respectively. These dimensions reflect low-density, upscale developments designed for exclusivity, privacy, and premium living standards.
+
+3. Despite being located in relatively compact zones, **`r compact_project_1`** and **`r compact_project_2`** also demonstrate generous average plot sizes. This suggests a strategic planning approach that emphasizes space and quality, indicative of high-end, low-density residential environments.
+
+4. **`r small_project`** contains a small number of properties, each with substantial land area. This configuration reflects a deliberate low-density development model, catering to residents seeking spacious plots and an enhanced quality of life.
+
+5. In contrast, **`r prop_project`** has the highest number of residential units—(**`r format(prop_count, big.mark = ",")`**)—distributed across a relatively limited number of plots averaging (**`r format(prop_avg_area, big.mark = ",")`** ). This marks it as a high-density project focused on maximizing housing capacity.
+
+6. **`r mid_project_2`**, consisting of **`r mid_project_1`** units, represents a well-balanced urban layout. It avoids extremes of overcrowding or underutilization, making it ideal for fostering a sustainable and inclusive community environment.
+
+7. **`r least_prop_project`** comprises a single unit with no remaining undeveloped plots. This implies it is either fully built-out or intentionally developed as a luxury, exclusive enclave with no scope for future expansion.
+
+8. **`r vacant_project`** includes several undeveloped plots, each averaging (**`r format(vacant_count, big.mark = ",")`**spm). This provides significant potential for future construction and investment, whether for residential, commercial, or mixed-use development.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`** and **`r opp_zone_3`** present valuable development opportunities. With existing neighborhood infrastructure and available land, these zones are strategically positioned for new investment and urban expansion.
+
+10. Riyadh’s urban structure incorporates a blend of high-density and low-density developments—such as **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**. This diverse planning approach supports dynamic growth, enabling the city to accommodate both increasing population demands and enhanced livability.
+
+### Report-14
+
+1. **`r max_project`** is the biggest project in Riyadh, with a total land area of (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm). It’s much larger than any other development in the city.
+
+2. **`r first_project`** and **`r second_project`** have large average land sizes (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), making them low-density, high-end developments focused on privacy and comfort.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** are in smaller areas but still offer big plots. This shows they are also likely low-density and designed for quality living.
+
+4. **`r small_project`** has fewer homes, each on large land, which also makes it a spacious, low-density project.
+
+5. **`r prop_project`** has the highest number of homes (**`r format(prop_count, big.mark = ",")`**) in limited space (**`r format(prop_avg_area, big.mark = ",")`** ), making it a crowded, high-density area.
+
+6. **`r mid_project_2`** with **`r mid_project_1`** units, is well-balanced—not too crowded and not too empty—making it good for community living.
+
+7. **`r least_prop_project`** has only one unit and no plots left. This means it’s either fully built or made to be a very exclusive development.
+
+8. **`r vacant_project`** has many empty plots (**`r format(vacant_count, big.mark = ",")`**spm), which are ideal for future building or investment.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`** and **`r opp_zone_3`** are good spots for new projects. These places already have neighborhoods and free land ready for use.
+
+10. Riyadh has both crowded and spacious areas—like **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**—which helps in balanced and smart city planning.
+
+### Report-15
+
+1. **`r max_project`** is the largest development in Riyadh, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm)—far bigger than any other project in the city.
+
+2. **`r first_project`** and **`r second_project`** offer large average land areas (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), indicating low-density, premium developments focused on space and privacy.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** are in smaller zones but still feature large plots, suggesting a focus on quality, low-density housing.
+
+4. **`r small_project`** has fewer houses, each on large plots, making it a spacious and low-density area.
+
+5. **`r prop_project`** has the highest number of homes (**`r format(prop_count, big.mark = ",")`**) in a limited space (**`r format(prop_avg_area, big.mark = ",")`** ), indicating a crowded, high-density development.
+
+6. **`r mid_project_2`** with **`r mid_project_1`** units, represents a balanced development—neither too dense nor too sparse—ideal for community living.
+
+7. **`r least_prop_project`** has only one unit and no remaining plots, suggesting it is either fully developed or intentionally exclusive.
+
+8. **`r vacant_project`** has many vacant plots (**`r format(vacant_count, big.mark = ",")`**spm), offering strong potential for future development or investment.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`** and **`r opp_zone_3`** are promising areas for new developments, as they already have surrounding infrastructure and available land.
+
+10. Riyadh includes both high-density and low-density areas—such as **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**—supporting diverse and balanced urban planning.
+
+### Report-16
+
+1. **`r max_project`** is the biggest project in Riyadh, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm)—much larger than any other.
+
+2. **`r first_project`** and **`r second_project`** have large average land areas (**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), showing they are spacious, high-end areas.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** are in smaller locations but still have big plots, meaning they are also low-density and focused on quality living.
+
+4. **`r small_project`** has few houses on big plots, making it an open and peaceful area.
+
+5. **`r prop_project`** has the most houses (**`r format(prop_count, big.mark = ",")`**) in a small space (**`r format(prop_avg_area, big.mark = ",")`** ), so it’s crowded and high-density.
+
+6. **`r mid_project_2`** with **`r mid_project_1`** homes is a balanced area—not too full or too empty—good for communities.
+
+7. **`r least_prop_project`** has just one home and no free land left. It’s either fully developed or very exclusive.
+
+8. **`r vacant_project`** has many empty plots (**`r format(vacant_count, big.mark = ",")`**spm), which are great for future building or investment.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`** and **`r opp_zone_3`** are good areas for new projects since they already have infrastructure and free land.
+
+10. Riyadh has both crowded and open areas—like **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**—which supports balanced city growth.
+
+### Report-17
+
+1. **`r max_project`** is the largest in Riyadh (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm).
+
+2. **`r first_project`** and **`r second_project`** are spacious, high-end areas.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** are small but low-density with large plots.
+
+4. **`r small_project`** has few homes on big plots—very open.
+
+5. **`r prop_project`** is crowded, with many homes in limited space.
+
+6. **`r mid_project_2`** with **`r mid_project_1`** homes is a well-balanced community.
+
+7. **`r least_prop_project`** has one unit—fully built or exclusive.
+
+8. **`r vacant_project`** has many empty plots (**`r format(vacant_count, big.mark = ",")`**spm)—ideal for investment.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`** and **`r opp_zone_3`** are ready for new projects.
+
+10. Riyadh has both high- and low-density areas, enabling smart growth like **`r high_density_project`**,**`r low_density_project_1`** and **`r low_density_project_2`**.
+
+### Report-18
+
+1. **`r max_project`** is the largest real estate development in Riyadh, covering a total land area of (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm). Its size far exceeds any other project in the city, making it a dominant feature in Riyadh’s urban landscape.
+
+2. **`r first_project`** and **`r second_project`** stand out for their large average land sizes—(**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm), respectively. These developments reflect low-density planning and are likely designed for upscale living with a strong focus on privacy and open space.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** are located in smaller zones, yet they still offer generously sized plots. This indicates an emphasis on quality living and low population density despite the limited overall area.
+
+4. **`r small_project`** contains only a few residential units, each situated on a large plot of land. This results in a very open and peaceful environment, ideal for residents seeking space and tranquility.
+
+5. **`r prop_project`** has the highest number of residential units (**`r format(prop_count, big.mark = ",")`**) within a relatively small land area (**`r format(prop_avg_area, big.mark = ",")`** ). This makes it a dense and crowded development, indicative of high population concentration and limited space per unit.
+
+6. **`r mid_project_2`** with **`r mid_project_1`** residential units, offers a balanced environment—not overly dense, but not too sparse either. It’s well-suited for community living and represents a middle ground between urban intensity and suburban openness.
+
+7. **`r least_prop_project`** consists of only one residential unit and has no remaining empty plots. This suggests the area is either fully developed or deliberately designed to be highly exclusive.
+
+8. **`r vacant_project`** has a significant number of vacant plots (**`r format(vacant_count, big.mark = ",")`**spm), which presents an excellent opportunity for future construction and investment. Such areas are often attractive to developers and investors looking for growth potential.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`** and **`r opp_zone_3`** are strategic zones for new development projects. They already benefit from nearby infrastructure and available land, making them ideal locations for expansion.
+
+10. Riyadh features a mix of both high-density and low-density developments. Areas like **`r high_density_project`** are more compact and populated, while **`r low_density_project_1`** and **`r low_density_project_2`** offer spacious, less crowded environments. This mix supports balanced and sustainable urban planning across the city.
+
+### Report-19
+
+1. **`r max_project`** is the biggest real estate project in Riyadh, covering (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm). It’s much larger than any other project in the city and stands out significantly.
+
+2. **`r first_project`** and **`r second_project`** have very large average land sizes—(**`r format(first_avg_area, big.mark = ",", scientific = FALSE)`** sqm and **`r format(second_avg_area, big.mark = ",", scientific = FALSE)`** sqm). These areas are low in density and designed for luxury, space, and privacy.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** are located in smaller zones, but still offer large plots. This shows a focus on quality living, with fewer homes and more personal space.
+
+4. **`r small_project`** has only a few houses, each on a big plot. This creates a quiet, open area perfect for peaceful living.
+
+5. **`r prop_project`** has the most homes—(**`r format(prop_count, big.mark = ",")`**)—in a small area—(**`r format(prop_avg_area, big.mark = ",")`** spm)—making it a densely populated and crowded zone.
+
+6. **`r mid_project_2`** with **`r mid_project_1`** homes offers a good balance—not too crowded and not too empty. It’s suitable for community life.
+
+7. **`r least_prop_project`** has just one home and no empty plots left, meaning it’s either completely built or meant to be a very exclusive place.
+
+8. **`r vacant_project`** has many empty plots—(**`r format(vacant_count, big.mark = ",")`**spm)—which are great opportunities for future buildings or investment.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`** and **`r opp_zone_3`** are good spots for new projects. These areas already have roads and services nearby and land ready for use.
+
+10. Riyadh includes both crowded and open neighborhoods. Projects like **`r high_density_project`** are more packed, while **`r low_density_project_1`** and **`r low_density_project_2`** are more open—supporting smart,
+balanced city planning.
+
+### Report-20
+
+1. **`r max_project`** is the largest project in Riyadh (**`r format(max_area, big.mark = ",", scientific = FALSE)`** sqm), far bigger than others.
+
+2. **`r first_project`** and **`r second_project`** have large average land sizes, offering low-density, luxury living.
+
+3. **`r compact_project_1`** and **`r compact_project_2`** are in small zones but have big plots—ideal for quality, spacious living.
+
+4. **`r small_project`** has few houses on large plots, making it open and peaceful.
+
+5. **`r prop_project`** is the most crowded with (**`r format(prop_count, big.mark = ",")`**) homes in a small area (**`r format(prop_avg_area, big.mark = ",")`** spm).
+
+6. **`r mid_project_2`** with **`r mid_project_1`** homes offers a balanced, community-friendly environment.
+
+7. **`r least_prop_project`** has only one home and no empty plots—fully developed or exclusive.
+
+8. **`r vacant_project`** has many empty plots (**`r format(vacant_count, big.mark = ",")`**spm)—great for future investment.
+
+9. **`r opp_zone_1`**,**`r opp_zone_2`** and **`r opp_zone_3`** are ready for development with existing infrastructure.
+
+10. Riyadh mixes dense and spacious areas—like **`r high_density_project`** , **`r low_density_project_1`** and **`r low_density_project_2`**—supporting balanced urban growth.
+
+# Graph
+
+```{r,warning=FALSE}
+
+df <- read.csv("~/7.Narration/0.Consolidate/Input/4.Graph/graph data.csv")
+
+
+# 1. Peak supply year
+peak_supply <- df %>%
+  slice(which.max(supply)) %>%
+  select(year, supply)
+peak_year <- peak_supply$year
+peak_value <- peak_supply$supply
+
+
+# 2. Lowest supply year
+low_supply <- df %>%
+  slice(which.min(supply)) %>%
+  select(year, supply)
+low_year <- low_supply$year
+low_value <- low_supply$supply
+
+# 3. Average supply over 5 years
+avg_supply <- mean(df$supply)
+
+# 4. Drop in supply from Peak to Present
+drop_from_peak <- peak_value - df$supply[df$year == 2025]
+
+# 5. Stable Period (2021–2023)
+stable_year <- df %>%
+  filter(year %in% c(2021, 2022, 2023))
+
+# Display table
+datatable(df)
+```
+
+## Reports {.tabset}
+
+### Report-1
+
+Here is a comprehensive analysis of residential land supply in the past 5 years:
+
+1. Peak supply year: The year **`r peak_year`** recorded the highest residential land supply at **`r format(peak_value, big.mark = ",")`**K units, marking the peak point in the 5-year trend.
+
+2. Lowest supply year: In contrast, **`r low_year`** had the lowest supply, totaling **`r format(low_value, big.mark = ",")`**K units, reflecting a noticeable drop from previous years.
+
+3. Stable Period (2021–2023): The supply remained relatively stable in the early years—2021 to 2023—fluctuating slightly between 652.6K, 652.7K, and 652.8K, indicating a consistent development pattern.
+
+4. Decline in Recent years: From the peak in **`r peak_year`** to **`r low_year`**, the supply dropped by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, signaling a contraction or saturation in land development.
+
+5. 5-year Average: The average residential land supply across all five years stands at **`r format(avg_supply, digits = 1, big.mark = ",")`**K units, reflecting the overall development pace.
+
+### Report-2
+
+1. Peak Supply Year (**`r peak_year`**): Residential land supply reached its highest point at **`r format(peak_value, big.mark = ",")`**K units, marking the peak of the five-year trend.
+
+2. Lowest Supply Year (**`r low_year`**): The supply declined to **`r format(low_value, big.mark = ",")`**K units in **`r low_year`**, representing the lowest figure during the period and highlighting a notable drop in development activity.
+
+3. Stable Period (2021–2023): The years 2021 to 2023 exhibited a relatively stable supply pattern, with minor fluctuations between 652.6K, 652.7K, and 652.8K units, indicating consistent development efforts.
+
+4. Recent Decline: A total reduction of **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units was recorded from **`r peak_year`** to **`r low_year`**, suggesting a contraction or possible saturation in residential land development.
+
+5. 5-Year Average Supply: The average annual residential land supply across the five years stood at approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units, reflecting the overall pace of development during the period.
+
+### Report-3
+
+1. 5-Year Average Supply: The average annual residential land supply across the five-year period (2021–2025) stood at approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units, reflecting the overall pace of development during this time.
+
+2. Stable Period (2021–2023): The years 2021 to 2023 exhibited a relatively consistent supply pattern, with minor fluctuations between 652.6K, 652.7K, and 652.8K units, indicating steady and sustained development activity.
+
+3. Peak Supply Year (**`r peak_year`**): Residential land supply reached its highest point at **`r format(peak_value, big.mark = ",")`**K units, marking the peak of the five-year trend.
+
+4. Recent Decline (**`r peak_year`** to **`r low_year`**): From the peak in **`r peak_year`** to **`r low_year`**, a total reduction of **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units was recorded, suggesting a contraction or possible saturation in residential land development.
+
+5. Lowest Supply Year (**`r low_year`**): The supply further declined to **`r format(low_value, big.mark = ",")`**K units in **`r low_year`**, representing the lowest figure in the five-year period and underscoring a significant drop in development activity.
+
+### Report-4
+
+1. Average Supply:
+Between 2021 and 2025, the average yearly land supply was about **`r format(avg_supply, digits = 1, big.mark = ",")`**K units.
+
+2. Stable Years (2021–2023):
+Supply stayed steady from 2021 to 2023, with small changes between 652.6K, 652.7K, and 652.8K units.
+
+3. Peak Year (**`r peak_year`**):
+The highest supply was in **`r peak_year`**, reaching **`r format(peak_value, big.mark = ",")`**K units.
+
+4. Decline (**`r peak_year`** to **`r low_year`**):
+From **`r peak_year`** to **`r low_year`**, supply dropped by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, showing a slowdown in development.
+
+5. Lowest Year (**`r low_year`**):
+In **`r low_year`**, supply fell to **`r format(low_value, big.mark = ",")`**K units, the lowest in the five years.
+
+### Report-5
+
+1. Average Supply (2021–2025):
+Over the five-year period from 2021 to 2025, the residential land supply averaged approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units per year, providing a general indication of the overall development pace during this time frame.
+
+2. Stable Supply Phase (2021–2023):
+The initial three years—2021 to 2023—demonstrated a period of relative stability in residential land supply. During this phase, the figures remained consistent, showing only minor year-to-year variations of 652.6K, 652.7K, and 652.8K units respectively. This pattern suggests a sustained and balanced development effort during the early years.
+
+3. Peak Supply Year (**`r peak_year`**):
+The year **`r peak_year`**marked the highest point in the five-year trend, with residential land supply reaching its peak at **`r format(peak_value, big.mark = ",")`**K units. This represented the culmination of the stable period and the maximum supply achieved during the timeframe.
+
+4. Declining Trend (**`r peak_year`** – **`r low_year`**):
+Following the peak in **`r peak_year`** , a noticeable decline in supply occurred over the next two years. Between **`r peak_year`** – **`r low_year`**, the total supply decreased by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, reflecting a clear slowdown in residential land development—potentially due to market saturation, shifting demand, or policy changes.
+
+5. Lowest Supply Year (**`r low_year`**):
+By **`r low_year`**, the supply had dropped to **`r format(low_value, big.mark = ",")`**K units, the lowest level recorded across the entire five-year period. This significant reduction highlights a marked decline in development activity, signaling a shift in the residential land supply trend.
+
+### Report-6
+
+1. Stable Supply Phase (2021–2023):
+The first three years—2021 to 2023—exhibited a period of relative stability in residential land supply. During this time, annual figures remained consistent, with only minor fluctuations of 652.6K, 652.7K, and 652.8K units, respectively. This pattern reflects steady and sustained development activity in the early phase.
+
+2. Peak Supply Year (**`r peak_year`**):
+The year **`r peak_year`** marked the highest point in the five-year trend, with residential land supply peaking at **`r format(peak_value, big.mark = ",")`**K units. This peak was the culmination of the preceding stable period and represents the maximum supply observed during the entire timeframe.
+
+3. Declining Trend (**`r peak_year`** – **`r low_year`**):
+Following the **`r peak_year`** peak, land supply experienced a steady decline over the next two years. From **`r peak_year`** – **`r low_year`**, supply decreased by  **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`** K units, indicating a slowdown in residential development. This downward trend may be attributed to market saturation, reduced demand, or changes in development policy.
+
+4. Lowest Supply Year (**`r low_year`**):
+By **`r low_year`**, residential land supply had fallen to  **`r format(low_value, big.mark = ",")`**K units, the lowest level recorded during the five-year period. This substantial reduction underscores a significant contraction in development activity and marks a clear turning point in the supply trend.
+
+5. Average Supply (2021–2025):
+Over the full five-year span, the average annual supply was approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units, offering a broad view of the overall development pace during the period.
+
+### Report-7
+
+1. Stable Supply Phase (2021–2023):
+The initial three-year period, from 2021 to 2023, reflected a phase of relative stability in residential land supply. During this time, the annual supply figures exhibited only minor fluctuations—652.6K, 652.7K, and 652.8K units, respectively. This consistency indicates a sustained and balanced pace of development in the early years of the analysis period.
+
+2. Peak Supply Year (**`r peak_year`**):
+The year **`r peak_year`** represented the peak in residential land supply, reaching **`r format(peak_value, big.mark = ",")`**K units—the highest level recorded over the five-year span. This peak marked the culmination of the preceding stable period and serves as a key milestone in the overall trend.
+
+3. Declining Trend (**`r peak_year`** – **`r low_year`**):
+Following the peak in **`r peak_year`**, a consistent decline in supply was observed over the subsequent two years. Between **`r peak_year`** – **`r low_year`**, the total residential land supply decreased by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, suggesting a deceleration in development activity. This downward shift may be attributed to factors such as market saturation, evolving demand dynamics, or regulatory changes affecting land development.
+
+4. Lowest Supply Year (**`r low_year`**):
+By **`r low_year`**, the residential land supply had declined to **`r format(low_value, big.mark = ",")`**K units, marking the lowest value within the five-year timeframe. This significant reduction underscores a pronounced contraction in development efforts and indicates a critical turning point in the land supply trend.
+
+5. Average Annual Supply (2021–2025):
+Across the entire period from 2021 to 2025, the average annual residential land supply was approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This figure provides a comprehensive view of the overall development intensity during these five years.
+
+### Report-8
+
+1. Average Supply (2021–2025):From 2021 to 2025, the average land supply was around **`r format(avg_supply, digits = 1, big.mark = ",")`**K units per year. This shows the overall pace of development during these years.
+
+2. Stable Years (2021–2023):The supply remained steady from 2021 to 2023, with small changes between 652.6K, 652.7K, and 652.8K units. This shows a consistent level of land development.
+
+3. Peak Year (**`r peak_year`**):The highest supply was in **`r peak_year`**, reaching **`r format(peak_value, big.mark = ",")`**K units. This was the peak of the five-year period.
+
+4. Decline (**`r peak_year`** – **`r low_year`**):After the peak in **`r peak_year`**, supply dropped by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units by **`r low_year`**, showing a slowdown in land development.
+
+5. Lowest Year (**`r low_year`**):In **`r low_year`**, supply fell to **`r format(low_value, big.mark = ",")`**K units—the lowest in the five years. This marks a major drop in activity.
+
+### Report-9
+
+1. Stable Years (2021–2023):The period from 2021 to 2023 reflected a phase of consistent and steady residential land supply. Throughout these three years, the supply figures showed only slight year-to-year changes—652.6K units in 2021, 652.7K units in 2022, and 652.8K units in 2023. This minor fluctuation indicates a balanced and well-maintained pace of development during the early phase of the five-year timeline, suggesting that the land market was operating in a stable and predictable manner during these years.
+
+2. Peak Supply Year (**`r peak_year`**):The year **`r peak_year`** marked the highest level of residential land supply during the entire five-year span. With a recorded supply of **`r format(peak_value, big.mark = ",")`**K units, it represented the peak point in the observed trend. This increase capped off the period of stability and signaled the maximum output of residential land development, possibly reflecting a culmination of earlier planning initiatives or favorable market conditions.
+
+3. Decline in Supply (**`r peak_year`** – **`r low_year`**):Following the peak in **`r peak_year`**, the land supply began to decline over the next two years. By **`r low_year`**, the supply had decreased by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units compared to the **`r peak_year`** figure. This downward shift suggests a slowdown in residential land development, which may have been influenced by several factors, such as reduced market demand, a shift in development policies, resource constraints, or the onset of saturation in available development zones.
+
+4. Lowest Supply Year (**`r low_year`**):The year **`r low_year`** saw the lowest supply in the five-year period, with residential land availability dropping to **`r format(low_value, big.mark = ",")`**K units. This represents a significant contraction compared to the peak in **`r peak_year`** and marks a clear turning point in the development trend. The drop may indicate deeper structural or economic changes within the housing or real estate sector, highlighting the need to re-evaluate development strategies going forward.
+
+5. Average Supply (2021–2025):Over the entire five-year period, the average annual residential land supply was approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This average offers a broader perspective on the overall development pace and reflects the combined effects of the stable beginning, the **`r peak_year`** peak, and the subsequent decline. It provides a useful benchmark for assessing long-term planning goals, resource management, and market responsiveness.
+
+### Report-10
+
+1. Stable Years (2021–2023):
+From 2021 to 2023, the amount of residential land supplied each year stayed nearly the same. In 2021, it was 652.6K units; in 2022, it slightly increased to 652.7K; and in 2023, it reached 652.8K units. These small changes show that land development was steady and consistent. It means the market was stable, and development was happening at a balanced rate.
+
+2. Peak Supply Year (**`r peak_year`**):
+In **`r peak_year`**, the supply reached its highest point in the five-year period at **`r format(peak_value, big.mark = ",")`**K units. This was the peak year, following three stable years. The increase may have been due to strong planning, higher demand, or better development conditions during that time.
+
+3. Decline in Supply (**`r peak_year`** – **`r low_year`**):
+After the peak in **`r peak_year`**, the supply of residential land started to drop. Over the next two years, by **`r low_year`**, it had reduced by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units. This drop shows that development activity slowed down. It could have happened because there was less demand, changes in rules or policies, or fewer resources available for building.
+
+4. Lowest Supply Year (**`r low_year`**):In **`r low_year`**, the supply dropped to **`r format(low_value, big.mark = ",")`**K units, which was the lowest level seen in all five years. This was a major decrease from the **`r peak_year`** peak and could be a sign that the market was slowing down. It may also mean that changes were happening in the housing sector or that fewer new developments were starting.
+
+5. Average Supply (2021–2025):Looking at all five years together, the average amount of land supplied each year was about **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This average gives a good idea of the general pace of development during this time. It helps planners and decision-makers understand how fast the city was growing and how much land was being used for residential projects.
+
+### Report-11
+
+1. Average Supply (2021–2025):
+From 2021 to 2025, the average yearly supply of residential land was about **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This gives an overall idea of how fast the city was growing and how much land was being used for housing during these five years.
+
+2. Stable Years (2021–2023):
+In the first three years—2021, 2022, and 2023—the land supply stayed steady. It was 652.6K in 2021, 652.7K in 2022, and 652.8K in 2023. These small changes show that development was consistent and the market was stable.
+
+3. Peak Year (**`r peak_year`**):
+The year **`r peak_year`** had the highest supply at **`r format(peak_value, big.mark = ",")`**K units, which was the peak of the five-year period. This could be due to good planning, strong demand, or favorable conditions for development.
+
+4. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+After the peak in **`r peak_year`**, supply started to drop. By **`r low_year`**, it had fallen to **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units. This shows that development activity slowed down—possibly because of lower demand, policy changes, or fewer resources.
+
+5. Lowest Year (**`r low_year`**):
+The lowest supply was recorded in **`r low_year`**, at **`r format(low_value, big.mark = ",")`**K units. This big drop from **`r peak_year`** may be a sign that the land market was shrinking or that fewer new projects were startin.
+
+### Report-12
+
+1. Stable Years (2021–2023):
+The first three years—2021, 2022, and 2023—showed a steady pattern in residential land supply. The figures were 652.6K in 2021, 652.7K in 2022, and 652.8K in 2023. These small fluctuations reflect a stable and consistent pace of development during this period.
+
+2. Peak Year (**`r peak_year`**):
+The supply reached its highest point in **`r peak_year`**, at **`r format(peak_value, big.mark = ",")`**K units. This peak marked the end of the stable phase and may have resulted from strong demand, effective planning, or favorable development conditions.
+
+3. Decline in Supply (**`r peak_year`**–**`r low_year`** ):
+After the peak year, the land supply began to decline steadily. By **`r low_year`**, the supply dropped to **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, showing a clear slowdown in development. This decline might be linked to shifting market conditions, reduced demand, or policy changes affecting construction activity.
+
+4. Lowest Year (**`r low_year`**):
+The lowest supply was seen in **`r low_year`**, with only **`r format(low_value, big.mark = ",")`**K units available. This noticeable drop from the **`r peak_year`** peak suggests a possible contraction in the residential land market and fewer new projects being launched.
+
+5. Average Supply (2021–2025):
+Across all five years, the average annual supply was around **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This average gives a general view of how much land was made available for housing each year and reflects the overall development pace during the period.
+
+### Report-13
+
+1. Stable Years (2021–2023):
+Between 2021 and 2023, the residential land supply remained relatively stable. The recorded figures were 652.6K units in 2021, 652.7K in 2022, and 652.8K in 2023. These minimal variations indicate a consistent and balanced rate of development, reflecting a period of sustained growth and steady demand in the early years.
+
+2. Peak Year (**`r peak_year`**):
+The year **`r peak_year`** marked the highest level of land supply, reaching **`r format(peak_value, big.mark = ",")`**K units. This peak represented the culmination of the prior stable phase and could be attributed to favorable market conditions, efficient urban planning, or increased demand for residential land.
+
+3. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+Following the **`r peak_year`** peak, a gradual decline in supply was observed. By **`r low_year`**, the land supply had fallen by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, indicating a clear reduction in development activity. This trend suggests possible causes such as market saturation, policy adjustments, or a decrease in investment in new residential projects.
+
+4. Lowest Year (**`r low_year`**):
+In **`r low_year`**, the land supply dropped to **`r format(low_value, big.mark = ",")`**K units—the lowest point in the five-year period. This decline underscores a significant slowdown in land development, hinting at a possible shift in market dynamics or strategic planning focus.
+
+5. Average Supply (2021–2025):
+Over the five-year period, the average annual supply was approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This average provides a balanced perspective of overall land development activity during these years and serves as a benchmark for long-term planning and analysis.
+
+### Report-14
+
+1. Average Supply (2021–2025):
+Throughout the five-year period from 2021 to 2025, the average annual supply of residential land was approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This figure offers a comprehensive overview of the overall pace of development and serves as a useful benchmark for analyzing long-term urban growth and planning efforts.
+
+2. Stable Years (2021–2023):
+The early years—2021, 2022, and 2023—exhibited a phase of consistent and stable supply. The respective figures of 652.6K, 652.7K, and 652.8K units show only slight variations, indicating a balanced rate of development and steady market demand during this initial phase.
+
+3. Peak Year (**`r peak_year`**):
+The year **`r peak_year`** marked the peak of residential land supply, reaching **`r format(peak_value, big.mark = ",")`**K units, the highest point in the observed period. This peak may be attributed to strong demand, effective planning policies, or optimal development conditions, bringing the earlier stable phase to its highest level of activity.
+
+4. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+Following the **`r peak_year`** peak, land supply began to decline gradually over the next two years. By **`r low_year`**, supply had decreased by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, reflecting a downturn in development momentum. The decline may point to factors such as policy changes, reduced investment, or market saturation.
+
+5. Lowest Year (**`r low_year`**):
+The lowest supply level was recorded in **`r low_year`**, with only **`r format(peak_value, big.mark = ",")`**K units. This significant drop highlights a marked contraction in residential land development and possibly signals a shift in planning focus or demand patterns.
+
+### Report-15
+
+1. Average Supply (2021–2025):
+Between 2021 and 2025, the city supplied an average of **`r format(avg_supply, digits = 1, big.mark = ",")`**K units of residential land each year. This helps us understand the overall pace of land development during these five years.
+
+2. Stable Years (2021–2023):
+In the first three years—2021 (652.6K), 2022 (652.7K), and 2023 (652.8K)—the supply remained steady with very small changes. This shows that development was consistent and the market was stable.
+
+3. Peak Year (**`r peak_year`**):
+The highest land supply was in **`r peak_year`**, reaching **`r format(peak_value, big.mark = ",")`**K units. This may have happened because of strong demand, good planning, or favorable conditions for construction.
+
+4. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+After **`r peak_year`**, the supply started to fall. By **`r low_year`**, it had dropped by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, which means development slowed down. This could be due to less demand, new policies, or fewer resources.
+
+5. Lowest Year (**`r low_year`**):
+The lowest land supply was seen in **`r low_year`**, with only **`r format(low_value, big.mark = ",")`**K units. This big drop shows a clear slowdown in new residential development projects.
+
+### Report-16
+
+1. Stable Years (2021–2023):
+The first three years—2021 (652.6K), 2022 (652.7K), and 2023 (652.8K)—showed a steady and consistent pattern of land supply. These small year-to-year changes suggest that the residential land market was stable and development was progressing at a balanced pace.
+
+2. Peak Year (**`r peak_year`**):
+The year **`r peak_year`** marked the highest land supply, reaching **`r format(peak_value, big.mark = ",")`**K units. This peak likely reflects strong housing demand, effective urban planning, and favorable conditions for residential development.
+
+3. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+After reaching its peak in **`r peak_year`**, the land supply began to decline. Over the next two years, it dropped by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, signaling a slowdown in development. This could be due to factors such as lower demand, changes in policy, or fewer available resources.
+
+4. Lowest Year (**`r low_year`**):
+In **`r low_year`**, the supply fell to its lowest point—**`r format(low_value, big.mark = ",")`**K units. This significant drop highlights a clear decrease in new housing development activity.
+
+5. Average Supply (2021–2025):
+Across all five years, the average annual supply was approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This figure gives an overall view of the city’s development pace during the period.
+
+### Report-17
+
+1. Across the entire five-year period, the average annual residential land supply was approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This provides a general overview of the city's development pace and the scale of land allocation for housing during these years.
+
+2. Stable Years (2021–2023):
+During the early phase—2021 (652.6K), 2022 (652.7K), and 2023 (652.8K)—the supply remained steady and consistent, with only slight variations. This stability suggests a well-balanced market and consistent development planning.
+
+3. Peak Year (**`r peak_year`**):
+ The year **`r peak_year`** recorded the highest land supply at **`r format(peak_value, big.mark = ",")`**K units. This peak may be the result of strong demand, favorable development conditions, or strategic planning efforts, capping off the earlier stable period. -->
+
+4. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+Following the peak, land supply began to decline. From **`r peak_year`**–**`r low_year`**, there was a drop of **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, indicating a slowdown in development. This decrease could be due to reduced demand, policy changes, or limited development resources.
+
+5. Lowest Year (**`r low_year`**):
+By **`r low_year`**, the supply had fallen to its lowest point—**`r format(low_value, big.mark = ",")`**K units. This significant drop reflects a notable slowdown in new residential development, possibly hinting at broader shifts in market dynamics or land use planning.
+
+### Report-18
+
+1. Stable Years (2021–2023):
+During the early phase of the five-year period, the residential land supply remained steady and consistent. In 2021, the supply was 652.6K units, followed by 652.7K units in 2022, and 652.8K units in 2023. These minor year-to-year changes suggest a well-balanced market and effective development planning.
+
+2. Peak Year (**`r peak_year`**):
+The year **`r peak_year`** marked the highest land supply, reaching **`r format(peak_value, big.mark = ",")`**K units. This peak represented the culmination of the stable period and could be attributed to strong housing demand, favorable development conditions, or strategic urban policies.
+
+3. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+After reaching its peak in **`r peak_year`**, residential land supply began to decline. By **`r low_year`**, the supply had dropped by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, signaling a slowdown in development activity. Possible reasons for this downturn include market saturation, policy shifts, or resource limitations.
+
+4. Lowest Year (**`r low_year`**):
+The lowest supply was recorded in , with only **`r format(low_value, big.mark = ",")`**K units available. This marks a significant drop from the **`r peak_year`** peak and may reflect changing market dynamics or a pause in major development initiatives.
+
+5. Average Supply (2021–2025):
+Across the entire five-year span, the average annual residential land supply stood at approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This figure gives a comprehensive view of the city’s development pace and how much land was allocated for housing over time.
+
+### Report-19
+
+1. Average Supply (2021–2025):
+Over the five-year period, the average annual residential land supply was approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This figure provides a broad perspective on the overall pace of development and the scale of land allocation for housing during this time.
+
+2. Stable Years (2021–2023):
+In the initial phase, land supply remained steady and consistent. The figures were 652.6K units in 2021, 652.7K in 2022, and 652.8K in 2023. These small changes reflect a well-balanced market and effective urban development planning.
+
+3. Peak Year (**`r peak_year`**):
+The year **`r peak_year`** saw the highest supply, reaching **`r format(peak_value, big.mark = ",")`**K units. This peak capped the stable period and may have been driven by strong housing demand, favorable development conditions, or strategic policy execution.
+
+4. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+After peaking in **`r peak_year`**, the supply declined steadily. By **`r low_year`**, it had dropped by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, suggesting a slowdown in development activity. The decline could be due to market saturation, policy changes, or resource constraints.
+
+5. Lowest Year (**`r low_year`**):
+The lowest recorded supply occurred in **`r low_year`**, falling to **`r format(low_value, big.mark = ",")`**K units. This notable decline from the 2023 peak points to a shift in development trends or a pause in new residential projects.
+
+### Report-20
+
+1. Stable Years (2021–2023):
+The initial three years—2021 (652.6K units), 2022 (652.7K units), and 2023 (652.8K units)—showed a steady and consistent pattern of residential land supply. These small year-to-year changes indicate a well-balanced market supported by effective urban planning and stable development demand.
+
+2. Peak Year (**`r peak_year`**):
+The year **`r peak_year`** marked the highest point in the five-year period, with land supply peaking at **`r format(peak_value, big.mark = ",")`**K units. This peak likely resulted from strong housing demand, favorable construction conditions, or successful implementation of strategic policies.
+
+3. Decline in Supply (**`r peak_year`**–**`r low_year`**):
+Following the **`r peak_year`** peak, a steady decline in supply began. By **`r low_year`**, land supply had decreased by **`r format(drop_from_peak, big.mark = ",", scientific = FALSE)`**K units, indicating a slowdown in development. Contributing factors could include policy adjustments, lower demand, or limited resources.
+
+4. Lowest Year (**`r low_year`**):
+In **`r low_year`**, the supply dropped to its lowest level in the five-year period—**`r format(low_value, big.mark = ",")`**K units. This significant reduction may signal a pause in new projects or a shift in land use priorities and planning strategies.
+
+5. Average Supply (2021–2025):
+Across the entire period, the average annual residential land supply stood at approximately **`r format(avg_supply, digits = 1, big.mark = ",")`**K units. This average serves as a useful benchmark for evaluating the overall pace of urban growth and housing development efforts.
+
+
+

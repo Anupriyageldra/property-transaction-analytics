@@ -1,0 +1,746 @@
+---
+output: 
+  html_document:
+    self_contained: false
+    mode: selfcontained
+    toc: true
+    toc_float: true
+    collapsed: false
+    smooth_scroll: false
+    orientation: rows
+    fig_width: 7
+    fig_height: 4.5
+    theme: cosmo
+    highlight: tango
+    code_folding: hide
+    flexdashboard::flex_dashboard: null
+---
+
+# Unit Transaction Report
+  
+```{r}
+library(dplyr)
+library(scales)
+library(openxlsx)
+library(lubridate)
+library(stringr)
+
+# Load and clean data once
+df <- read.xlsx("E:\\narration\\vinay sir files\\unit_transactions_1750066298503.xlsx") %>%
+  filter(OUTLIER == "No") %>%
+  mutate(
+    VALUE = as.numeric(`VALUE.(SAR)`),
+    AREA = as.numeric(`UNIT.AREA.(sqm)`),
+    RATE = as.numeric(`TRANSACTION.RATE.(SAR/sqm)`),
+    DATE = as.Date(`TRANSACTION.DATE`),
+    NEIGHBORHOOD = str_to_title(NEIGHBORHOOD),
+    ZONE = str_to_title(ZONE)
+  ) %>%
+  filter(!is.na(VALUE), !is.na(AREA), !is.na(RATE), !is.na(DATE), !is.na(NEIGHBORHOOD), !is.na(ZONE))
+
+#--------------- Point 1: High-Value Transactions
+# Get top 2 high-value transactions
+top_tx_hv <- df %>% arrange(desc(VALUE)) %>% slice(1:2)
+
+# Format values for sentence
+hv_n1 <- top_tx_hv$NEIGHBORHOOD[1]
+hv_a1 <- paste0(formatC(top_tx_hv$AREA[1], format = "f", digits = 0), " sqm")
+hv_v1 <- dollar(top_tx_hv$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+hv_r1 <- formatC(top_tx_hv$RATE[1], format = "f", digits = 0, big.mark = ",")
+hv_d1 <- format(top_tx_hv$DATE[1], "%B %d, %Y")
+
+hv_n2 <- top_tx_hv$NEIGHBORHOOD[2]
+hv_a2 <- paste0(formatC(top_tx_hv$AREA[2], format = "f", digits = 0), " sqm")
+hv_v2 <- dollar(top_tx_hv$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+hv_r2 <- formatC(top_tx_hv$RATE[2], format = "f", digits = 0, big.mark = ",")
+hv_d2 <- format(top_tx_hv$DATE[2], "%B %d, %Y")
+
+#--------------- Point 2: Premium Pricing by Neighborhood
+# Average rate per neighborhood
+rate_by_neigh_p <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(avg_rate = mean(RATE, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(avg_rate))
+
+# Top 3 premium neighborhoods
+top3_p <- rate_by_neigh_p %>% slice(1:3)
+# One affordable neighborhood
+low1_p <- rate_by_neigh_p %>% slice_tail(n = 1)
+
+# Format values (round to nearest hundred)
+p_n1 <- top3_p$NEIGHBORHOOD[1]
+p_r1 <- paste0("SAR ", formatC(round(top3_p$avg_rate[1], -2), format = "f", digits = 0, big.mark = ","))
+p_n2 <- top3_p$NEIGHBORHOOD[2]
+p_r2 <- paste0("SAR ", formatC(round(top3_p$avg_rate[2], -2), format = "f", digits = 0, big.mark = ","))
+p_n3 <- top3_p$NEIGHBORHOOD[3]
+p_r3 <- paste0("SAR ", formatC(round(top3_p$avg_rate[3], -2), format = "f", digits = 0, big.mark = ","))
+p_nl <- low1_p$NEIGHBORHOOD
+p_rl <- paste0("SAR ", formatC(round(low1_p$avg_rate, -2), format = "f", digits = 0, big.mark = ","))
+
+#--------------- Point 3: High-Demand Neighborhoods
+# Count transactions per neighborhood
+txn_counts_d <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  arrange(desc(count))
+
+# Get top 3 neighborhoods
+top3_d <- txn_counts_d %>% slice(1:3)
+
+# Extract values and round counts
+d_n1 <- top3_d$NEIGHBORHOOD[1]
+d_c1 <- round(top3_d$count[1], -1)  # nearest 10
+d_n2 <- top3_d$NEIGHBORHOOD[2]
+d_c2 <- round(top3_d$count[2], -1)
+d_n3 <- top3_d$NEIGHBORHOOD[3]
+d_c3 <- round(top3_d$count[3], -1)
+
+#--------------- Point 4: Property Type Trends
+# Function to get zone-level top neighborhood and rate summary (with filtering)
+get_zone_summary <- function(zone_name) {
+  zone_df <- df %>%
+    filter(ZONE == zone_name, !is.na(RATE), !is.na(NEIGHBORHOOD), NEIGHBORHOOD != "UNKNOWN")
+  
+  if (nrow(zone_df) < 5) {
+    return(NULL)
+  }
+  
+  top_neigh <- zone_df %>%
+    group_by(NEIGHBORHOOD) %>%
+    summarise(n = n(), avg_rate = mean(RATE, na.rm = TRUE), .groups = "drop") %>%
+    arrange(desc(n)) %>%
+    slice(1) %>%
+    pull(NEIGHBORHOOD)
+  
+  stats <- zone_df %>%
+    filter(NEIGHBORHOOD == top_neigh) %>%
+    summarise(
+      min_rate = min(RATE, na.rm = TRUE),
+      max_rate = max(RATE, na.rm = TRUE),
+      avg_rate = mean(RATE, na.rm = TRUE)
+    )
+  
+  if (is.na(stats$min_rate) | is.na(stats$max_rate) | is.na(stats$avg_rate)) {
+    return(NULL)
+  }
+  
+  list(
+    neighborhood = top_neigh,
+    min_rate = round(stats$min_rate),
+    max_rate = round(stats$max_rate),
+    avg_rate = round(stats$avg_rate)
+  )
+}
+
+# Get summaries (using correct zone names)
+res_building_t <- get_zone_summary("Residential Building")
+villa_t <- get_zone_summary("Single Family Villa")
+res_commercial_t <- get_zone_summary("Residential Commercial")
+
+#--------------- Point 5: Pricing Segmentation
+# Get max/min rate by neighborhood
+rate_by_neigh_s <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(
+    max_rate = max(RATE, na.rm = TRUE),
+    min_rate = min(RATE, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(max_rate))
+
+# Get top 2 luxury and 2 affordable neighborhoods
+luxury_s <- rate_by_neigh_s %>% slice(1:2)
+affordable_s <- rate_by_neigh_s %>% arrange(max_rate) %>% slice(1:2)
+
+# Format values
+s_lux1 <- luxury_s$NEIGHBORHOOD[1]
+s_lux2 <- luxury_s$NEIGHBORHOOD[2]
+s_lux_max <- paste0("SAR ", formatC(round(max(luxury_s$max_rate), -2), format = "f", digits = 0, big.mark = ","))
+s_aff1 <- affordable_s$NEIGHBORHOOD[1]
+s_aff2 <- affordable_s$NEIGHBORHOOD[2]
+s_aff_min <- paste0("SAR ", formatC(round(min(affordable_s$min_rate), -2), format = "f", digits = 0, big.mark = ","))
+s_aff_max <- paste0("SAR ", formatC(round(max(affordable_s$max_rate), -2), format = "f", digits = 0, big.mark = ","))
+
+#--------------- Point 6: Largest Plot Deals
+# Get top 2 largest unit area transactions
+top_large_plots_l <- df %>%
+  arrange(desc(AREA)) %>%
+  slice(1:2)
+
+# Extract and format data
+l_n1 <- top_large_plots_l$NEIGHBORHOOD[1]
+l_v1 <- dollar(top_large_plots_l$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+l_a1 <- paste0(formatC(top_large_plots_l$AREA[1], format = "f", digits = 0), " sqm")
+l_r1 <- paste0("SAR ", formatC(round(top_large_plots_l$RATE[1], 0), big.mark = ","))
+l_d1 <- format(top_large_plots_l$DATE[1], "%B %d, %Y")
+
+l_n2 <- top_large_plots_l$NEIGHBORHOOD[2]
+l_v2 <- dollar(top_large_plots_l$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+l_a2 <- paste0(formatC(top_large_plots_l$AREA[2], format = "f", digits = 0), " sqm")
+l_r2 <- paste0("SAR ", formatC(round(top_large_plots_l$RATE[2], 0), big.mark = ","))
+l_d2 <- format(top_large_plots_l$DATE[2], "%B %d, %Y")
+
+#--------------- Point 7: Top Land Transactions by Value
+# Top 2 transactions by value
+top_tx_t <- df %>%
+  arrange(desc(VALUE)) %>%
+  slice(1:2)
+
+# Extract and format first transaction
+t_n1 <- top_tx_t$NEIGHBORHOOD[1]
+t_d1 <- format(top_tx_t$DATE[1], "%B %d, %Y")
+t_v1 <- dollar(top_tx_t$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+t_a1 <- paste0(formatC(top_tx_t$AREA[1], format = "f", digits = 0, big.mark = ","), " sqm")
+t_r1 <- paste0("SAR ", formatC(round(top_tx_t$RATE[1], 0), format = "f", big.mark = ","))
+
+# Extract and format second transaction
+t_n2 <- top_tx_t$NEIGHBORHOOD[2]
+t_d2 <- format(top_tx_t$DATE[2], "%B %d, %Y")
+t_v2 <- dollar(top_tx_t$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+t_a2 <- paste0(formatC(top_tx_t$AREA[2], format = "f", digits = 0, big.mark = ","), " sqm")
+t_r2 <- paste0("SAR ", formatC(round(top_tx_t$RATE[2], 0), format = "f", big.mark = ","))
+```
+## Reports {.tabset}
+
+###  REPORT-1
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** sqm unit in **`r hv_n1`** fetched  **`r hv_v1`**, equating to  **`r hv_r1`** per sqm, marking the top sale. **`r hv_n2`** saw a **`r hv_a2`** sqm property sold for  **`r hv_v2`** ( **`r hv_r2`**per sqm) on **`r hv_d2`**, reflecting strong interest in luxury real estate.
+
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** leads with an average price of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers more affordable options, averaging around **`r p_rl`** per sqm
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded approximately  **`r d_c1`** transactions, showcasing significant buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with about **`r d_c2`** and **`r d_c3`** sales, respectively, indicating robust market activity.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract upscale buyers. **`r villa_t$neighborhood`** villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, appeal to family buyers. Residential commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor interest.
+
+#### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, where prices reach up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more budget-conscious buyers, with prices spanning **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, highlighting demand for sizable development land.
+
+
+#### 7. Top Land Transactions by Value
+A major transaction in **`r t_n1`** on **`r t_d1`**, saw **`r t_a1`** sold for **`r t_v1`** (SAR **`r t_a1`**), reflecting high-value acquisitions. **`r t_n2`** recorded a **`r t_a2`** plot sold for **`r t_r2`** (**`r t_a1`** per sqm) on **`r t_d2`**, indicating strategic investment opportunities.
+
+
+
+### REPORT-2
+
+#### 1. High-Value Transactions
+
+A **`r hv_a1`** sqm unit in  **`r hv_r1`** sold for SAR **`r hv_n1`** (**`r hv_v1`** per sqm) on **`r hv_d1`**, marking the top transaction. On **`r hv_d2`**, **`r hv_n2`** saw **`r hv_a2`** sqm property fetch **`r hv_v2`** ( **`r hv_r2`** per sqm), indicating strong premium market interest.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** commands top prices at **`r p_r1`** per sqm, sqm followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers more budget-friendly options at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** leads with approximately **`r d_c1`** sales, showcasing significant buyer interest. **`r d_n2`** and **`r d_n3`** follow with about **`r d_c2`** and **`r d_c3`** transactions, respectively, reflecting sustained market engagement.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract upscale buyers. **`r villa_t$neighborhood`** villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, appeal to family buyers. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, attract investors.
+
+#### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, with prices up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more affordable segments, with prices between **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, signaling demand for sizable development land.
+
+
+#### 7. Top Land Transactions by Value
+The largest land deal occurred in **`r t_n1`** on **`r t_d1`**, with a transaction of **`r t_v1`** for **`r t_a1`** at a rate of **`r t_r1`**, indicating high-value acquisition in a premium zone. Another significant deal was recorded in **`r t_n2`** on **`r t_d2`**, totalling **`r t_v2`** for **`r t_a2`** at **`r t_r2`**, reflecting strategic investment in a cost-efficient location.
+
+
+###  REPORT-3
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** sqm property in **`r hv_r1`** sold for SAR **`r hv_n1`**, translating to **`r hv_v1`** per sqm, the highest deal recorded. **`r hv_n2`** saw a **`r hv_a2`** sqm unit fetch **`r hv_v2`** (**`r hv_r2`** per sqm) on **`r hv_d2`**, reflecting keen interest in upscale properties.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** sets the benchmark with an average of **`r p_r1`** per sqm. **`r p_n2`** and **`r p_r2`** follow at **`r p_n3`** and **`r p_r3`** per sqm, respectively, while **`r p_nl`** offers more economical pricing at roughly **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** leads with around **`r d_c1`** sales, signaling robust buyer demand.  **`r d_n2`** and **`r d_n3`** trail with approximately **`r d_c2`** and **`r d_c3`** transactions, respectively, demonstrating steady market traction
+
+#### 4. Property Type Trends
+In **`r res_building_t$neighborhood`**, residential buildings priced from **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm appeal to affluent buyers. **`r villa_t$neighborhood`** villas, ranging from **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, attract family-oriented purchasers. **`r res_commercial_t$neighborhood`** commercial properties, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, are favored by investors.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** cater to luxury buyers with prices up to **`r s_lux_max`** per sqm. More accessible markets like  **`r s_aff1`** and **`r s_aff2`** offer properties priced between **`r s_aff_min`** to **`r s_aff_max`**, accommodating diverse budgets.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** sqm plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** sqm plot in **`r l_n2`** went for **`r l_v2`**, indicating strong demand for large development plots.
+
+#### 7. Top Land Transactions by Value
+On **`r t_d1`**, **`r t_n1`** recorded a **`r t_r1`** transaction for **`r t_a1`** (**`r t_v1`**), a prime land deal. **`r t_n2`** saw a **`r t_v2`** sqm plot sold for SAR **`r t_r2`** (SAR **`r t_a2`** sqm) on **`r t_d2`**, highlighting strategic land investments
+
+
+###  REPORT-4
+
+#### 1. High-Value Transactions
+
+On **`r hv_d1 `**, a **`r hv_a1 `** unit in **`r hv_n1 `** fetched **`r hv_v1 `** (SAR **`r hv_r1 `** per sqm), the highest sale recorded. A **`r hv_a2` ** property in **`r hv_n2 `** sold for **`r hv_v2 `** (SAR **`r hv_r2 `** per sqm) on **`r hv_d2 `**, signaling strong demand for premium real estate.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1 `** leads with an average of **`r p_r1 `** per sqm, followed by **`r p_n2 `** at **`r p_r2 `** per sqm and **`r p_n3 `** at **`r p_r3 `** per sqm. **`r p_nl `** remains cost-effective, averaging **`r p_rl `** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+**`r d_n1 `** saw about **`r d_c1 `** transactions, indicating high buyer enthusiasm. **`r d_n2 `** and **`r d_n3 `** followed with roughly **`r d_c2 `** and **`r d_c3 `** transactions, respectively, reflecting ongoing market vitality.
+
+#### 4. Property Type Trends
+
+**`r res_building_t$neighborhood `**’s residential buildings, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",") `** to SAR **`r format(res_building_t$max_rate, big.mark = ",") `** per sqm, appeal to high-end buyers. Villas in **`r villa_t$neighborhood `**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",") `** to SAR **`r format(villa_t$max_rate, big.mark = ",") `** per sqm, attract family buyers. Commercial units in **`r res_commercial_t$neighborhood `**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",") `** per sqm, are popular among investors.
+
+#### 5. Pricing Segmentation
+
+**`r s_lux1 `** and **`r s_lux2 `** attract luxury buyers with prices peaking at **`r s_lux_max `** per sqm. More affordable neighborhoods like **`r s_aff1 `** and **`r s_aff2 `** offer prices ranging from **`r s_aff_min `** to **`r s_aff_max `** per sqm.
+
+#### 6. Largest Plot Deals
+
+On **`r l_d1 `**, a **`r l_a1 `** plot in **`r l_n1 `** sold for **`r l_v1 `** (SAR **`r l_r1 `** per sqm). A **`r l_a2 `** plot in **`r l_n2 `** went for **`r l_v2 `** on **`r l_d2 `**, showing interest in large land for development.
+
+#### 7. Top Land Transactions by Value
+
+A major **`r t_v1 `** sale for **`r t_a1 `** (SAR **`r t_r1 `** per sqm) was recorded in **`r t_n1 `** on **`r t_d1 `**. **`r t_n2 `** saw a **`r t_v2 `** transaction for **`r t_a2 `** (SAR **`r t_r2 `** per sqm) on **`r t_d2 `**, highlighting strategic land acquisitions.
+
+
+
+###  REPORT-5
+
+#### 1. High-Value Transactions
+**`r hv_n1`** recorded the highest sale with a **`r hv_a1`** unit fetching **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**. **`r hv_n2`** followed closely with a **`r hv_a2`** unit sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, showing strong demand for premium properties.
+
+
+#### 2. Premium Pricing by Neighborhood
+Prices vary significantly by neighborhood, with **`r p_n1`** leading at approximately **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow with solid averages near **`r p_r2`** and **`r p_r3`** per sqm, respectively. More affordable neighborhoods like **`r p_nl`** average around **`r p_rl`** per sqm.
+
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** shows the highest transaction volume with roughly **`r d_c1`** sales, indicating strong buyer interest. **`r d_n2`** and **`r d_n3`** follow with about **`r d_c2`** and **`r d_c3`** transactions respectively, reflecting sustained market activity.
+
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`** appeal to premium buyers with prices ranging from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm. Villas in **`r villa_t$neighborhood`** attract families, priced between SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm. Commercial properties in **`r res_commercial_t$neighborhood`** draw investor interest, averaging around SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm.
+
+
+#### 5. Pricing Segmentation
+The market serves diverse buyers, with luxury buyers concentrated in **`r s_lux1`** and **`r s_lux2`**, where prices can reach up to **`r s_lux_max`** per sqm. Meanwhile, neighborhoods like **`r s_aff1`** and **`r s_aff2`** offer more affordable options, ranging from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+#### 6. Largest Plot Deals
+Demand for large plots remains strong; **`r l_n1`** saw a top sale of **`r l_v1`** for a **`r l_a1`** plot (**`r l_r1`** per sqm) on **`r l_d1`**. **`r l_n2`** recorded **`r l_v2`** for a **`r l_a2`** plot on **`r l_d2`**, highlighting interest in sizable project-ready land.
+
+
+#### 7. Top Land Transactions by Value
+The largest land deal occurred in **`r t_n1`** on **`r t_d1`**, with a transaction of **`r t_v1`** for **`r t_a1`** at a rate of **`r t_r1`**, indicating high-value acquisition in a premium zone. Another significant deal was recorded in **`r t_n2`** on **`r t_d2`**, totalling **`r t_v2`** for **`r t_a2`** at **`r t_r2`**, reflecting strategic investment in a cost-efficient location.
+
+
+###  REPORT-6
+
+#### 1. High-Value Transactions
+**`r hv_n1`** led luxury property sales with a **`r hv_a1`** unit selling for **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**. **`r hv_n2`** followed on **`r hv_d2`**, with a **`r hv_a2`** unit sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm), showcasing solid market interest in upscale units.
+
+#### 2. Premium Pricing by Neighborhood
+Premium neighborhoods exhibit significant pricing differences. **`r p_n1`** tops the list with an average rate of **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow, averaging **`r p_r2`** and **`r p_r3`** per sqm respectively. In contrast, **`r p_nl`** offers affordability with units priced around **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** shows unmatched buyer activity with approximately **`r d_c1`** transactions. **`r d_n2`** maintains strong momentum with around **`r d_c2`** deals, while **`r d_n3`** remains active with **`r d_c3`** sales, reflecting widespread market participation.
+
+#### 4. Property Type Trends
+In **`r res_building_t$neighborhood`**, **residential buildings** priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** and SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm appeal to premium buyers. **`r villa_t$neighborhood`’s villas**, priced from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, attract family-oriented segments. **`r res_commercial_t$neighborhood`'s commercial units** average **SAR `r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, capturing investor interest.
+
+#### 5. Pricing Segmentation
+Luxury pricing defines **`r s_lux1`** and **`r s_lux2`**, with top rates hitting **`r s_lux_max`** per sqm. Conversely, **`r s_aff1`** and **`r s_aff2`** cater to value-conscious buyers, with prices ranging between **`r s_aff_min`** and **`r s_aff_max`** per sqm, offering broader accessibility.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** fetched **`r l_v1`** (**`r l_r1`** per sqm). A second major deal on **`r l_d2`** saw **`r l_n2`** transact **`r l_a2`** for **`r l_v2`**, signaling demand for large, centrally located parcels.
+
+#### 7. Top Land Transactions by Value
+**`r t_n1`** recorded a landmark deal on **`r t_d1`**, with **`r t_a1`** selling for **`r t_v1`** (**`r t_r1`** per sqm). **`r t_n2`** followed with a **`r t_v2`** transaction on **`r t_d2`** for **`r t_a2`** (**`r t_r2`** per sqm), highlighting cost-effective acquisition opportunities.
+
+
+###  REPORT-7
+
+#### 1. High-Value Transactions
+A **`r hv_a1`** property in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**, marking the top sale. On **`r hv_d2`**, a **`r hv_a2`** unit in **`r hv_n2`** went for **`r hv_v2`** (SAR **`r hv_r2`** per sqm), reflecting robust luxury market demand.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** tops the market with prices averaging **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow at **`r p_r2`** and **`r p_r3`** per sqm, respectively, while **`r p_nl`** offers more accessible pricing at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+With roughly **`r d_c1`** sales, **`r d_n1`** leads in transaction volume. **`r d_n2`** and **`r d_n3`** record about **`r d_c2`** and **`r d_c3`** transactions, respectively, showcasing sustained market interest.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**'s residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** and SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract affluent buyers. **`r villa_t$neighborhood`’s villas**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, are favored by families. **`r res_commercial_t$neighborhood`**'s commercial properties, at **SAR `r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investors.
+
+#### 5. Pricing Segmentation
+Luxury buyers gravitate toward **`r s_lux1`** and **`r s_lux2`**, with prices up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** serve more budget-conscious buyers, with prices from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** was sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`**, indicating interest in large development parcels.
+
+#### 7. Top Land Transactions by Value
+On **`r t_d1`**, **`r t_n1`** recorded a **`r t_v1`** deal for **`r t_a1`** (**`r t_r1`** per sqm), a significant transaction. **`r t_n2`** saw a **`r t_v2`** sale for **`r t_a2`** (**`r t_r2`** per sqm) on **`r t_d2`**, reflecting strategic investment potential.
+
+
+
+
+###  REPORT-8
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** unit in **`r hv_n1`** fetched **`r hv_v1`** (SAR **`r hv_r1`** per sqm), the highest sale recorded. A **`r hv_a2`** property in **`r hv_n2`** sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, signaling strong demand for premium real estate.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** leads with an average of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** remains cost-effective, averaging **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** saw about **`r d_c1`** transactions, indicating high buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with roughly **`r d_c2`** and **`r d_c3`** sales, respectively, reflecting ongoing market vitality.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`’s residential buildings**, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, appeal to high-end buyers. Villas in **`r villa_t$neighborhood`**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, attract family buyers. Commercial units in **`r res_commercial_t$neighborhood`**, averaging **SAR `r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, are popular among investors.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** attract luxury buyers with prices peaking at **`r s_lux_max`** per sqm. More affordable neighborhoods like **`r s_aff1`** and **`r s_aff2`** offer prices ranging from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** went for **`r l_v2`** on **`r l_d2`**, showing interest in large land for development.
+
+#### 7. Top Land Transactions by Value
+A major **`r t_v1`** sale for **`r t_a1`** (**`r t_r1`** per sqm) was recorded in **`r t_n1`** on **`r t_d1`**. **`r t_n2`** saw a **`r t_v2`** transaction for **`r t_a2`** (**`r t_r2`** per sqm) on **`r t_d2`**, highlighting strategic land acquisitions.
+
+
+
+###  REPORT-9
+
+#### 1. High-Value Transactions
+A **`r hv_a1`** unit in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**, the top transaction. On **`r hv_d2`**, a **`r hv_a2`** property in **`r hv_n2`** fetched **`r hv_v2`** (SAR **`r hv_r2`** per sqm), indicating robust luxury market interest.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** commands top prices at **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers budget-friendly options at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** leads with approximately **`r d_c1`** sales, showcasing significant buyer interest. **`r d_n2`** and **`r d_n3`** follow with about **`r d_c2`** and **`r d_c3`** transactions, respectively, reflecting sustained market engagement.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**’ residential buildings, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, draw affluent buyers. **`r villa_t$neighborhood`**’s villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, appeal to family buyers. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, attract investors.
+
+#### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, with prices up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more affordable segments, with prices between **`r s_aff_min`** and **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** fetched **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** sold for **`r l_v2`** on **`r l_d2`**, signaling demand for sizable development land.
+
+#### 7. Top Land Transactions by Value
+On **`r t_d1`**, **`r t_n1`** saw a **`r t_v1`** deal for **`r t_a1`** (**`r t_r1`** per sqm), a major acquisition. **`r t_n2`** recorded a **`r t_v2`** sale for **`r t_a2`** (**`r t_r2`** per sqm) on **`r t_d2`**, highlighting strategic investment opportunities.
+
+
+
+###  REPORT-10
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** property in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm), the highest deal. A **`r hv_a2`** unit in **`r hv_n2`** went for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, reflecting strong demand for premium properties.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** averages **`r p_r1`** per sqm, leading the market. **`r p_n2`** and **`r p_n3`** follow at **`r p_r2`** and **`r p_r3`**, respectively, while **`r p_nl`** offers more affordable pricing at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded around **`r d_c1`** transactions, indicating robust buyer activity. **`r d_n2`** and **`r d_n3`** followed with approximately **`r d_c2`** and **`r d_c3`** sales, respectively, showing consistent market momentum.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**’ residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** and SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract high-end buyers. Villas in **`r villa_t$neighborhood`**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, are favored by families. Commercial units in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor interest.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** target luxury buyers with prices reaching **`r s_lux_max`** per sqm. More accessible areas like **`r s_aff1`** and **`r s_aff2`** offer properties priced from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`**, highlighting demand for large plots.
+
+#### 7. Top Land Transactions by Value
+A significant **`r t_v1`** sale for **`r t_a1`** (**`r t_r1`** per sqm) occurred in **`r t_n1`** on **`r t_d1`**. **`r t_n2`** saw a **`r t_v2`** deal for **`r t_a2`** (**`r t_r2`** per sqm) on **`r t_d2`**, indicating strategic land acquisitions.
+
+
+###  REPORT-11
+
+#### 1. High-Value Transactions
+A **`r hv_a1`** unit in **`r hv_n1`** fetched **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**, the top sale. On **`r hv_d2`**, a **`r hv_a2`** property in **`r hv_n2`** sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm), showcasing strong luxury market demand.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** commands premium prices, averaging **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** are priced at **`r p_r2`** and **`r p_r3`**, respectively, while **`r p_nl`** provides budget-friendly options at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+With about **`r d_c1`** sales, **`r d_n1`** exhibits strong buyer interest. **`r d_n2`** and **`r d_n3`** follow with roughly **`r d_c2`** and **`r d_c3`** transactions, respectively, reflecting sustained market activity.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, draw premium buyers. Villas in **`r villa_t$neighborhood`**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`**, appeal to families. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, attract investment interest.
+
+#### 5. Pricing Segmentation
+Luxury markets in **`r s_lux1`** and **`r s_lux2`** see prices up to **`r s_lux_max`** per sqm, while **`r s_aff1`** and **`r s_aff2`** offer more affordable properties, priced from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** was sold for **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`** on **`r l_d2`**, signaling interest in sizable development land.
+
+#### 7. Top Land Transactions by Value
+A landmark **`r t_v1`** deal for **`r t_a1`** (**`r t_r1`** per sqm) was recorded in **`r t_n1`** on **`r t_d1`**. **`r t_n2`** saw a **`r t_v2`** transaction for **`r t_a2`** (**`r t_r2`** per sqm) on **`r t_d2`**, highlighting strategic investment opportunities.
+
+
+
+###  REPORT-12
+
+#### 1. High-Value Transactions
+A standout sale in **`r hv_n1`** on **`r hv_d1`** involved a **`r hv_a1`** unit sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm). On **`r hv_d2`**, a **`r hv_a2`** unit in **`r hv_n2`** went for **`r hv_v2`** (SAR **`r hv_r2`** per sqm), underscoring premium property demand.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** commands the highest prices at approximately **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow with averages of **`r p_r2`** and **`r p_r3`** per sqm, respectively. **`r p_nl`** remains more accessible, with prices around **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+With roughly **`r d_c1`** sales, **`r d_n1`** leads in transaction volume, reflecting strong market interest. **`r d_n2`** and **`r d_n3`** trail with approximately **`r d_c2`** and **`r d_c3`** transactions, respectively, showing consistent buyer engagement.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**’ residential buildings, ranging from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, appeal to high-end buyers. Villas in **`r villa_t$neighborhood`**, priced between SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`**, attract families. **`r res_commercial_t$neighborhood`**’ commercial units, at SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, are popular among investors.
+
+#### 5. Pricing Segmentation
+High-end buyers gravitate toward **`r s_lux1`** and **`r s_lux2`**, with prices peaking at **`r s_lux_max`** per sqm. More affordable options in **`r s_aff1`** and **`r s_aff2`** range from **`r s_aff_min`** to **`r s_aff_max`** per sqm, serving diverse market segments.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`**, signaling interest in large development parcels.
+
+#### 7. Top Land Transactions by Value
+On **`r t_d1`**, **`r t_n1`** saw a **`r t_v1`** deal for **`r t_a1`** (**`r t_r1`** per sqm), a significant premium land sale. **`r t_n2`** recorded a **`r t_v2`** transaction for **`r t_a2`** (**`r t_r2`** per sqm) on **`r t_d2`**, highlighting cost-effective investment potential.
+
+
+
+###  REPORT-13
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** property in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm), marking the highest transaction. A **`r hv_a2`** unit in **`r hv_n2`** went for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, reflecting robust premium property demand.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** tops the market with an average of **`r p_r1`** per sqm. **`r p_n2`** and **`r p_n3`** follow at **`r p_r2`** and **`r p_r3`** per sqm, respectively, while **`r p_nl`** offers more accessible pricing at **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded around **`r d_c1`** transactions, showcasing significant buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with approximately **`r d_c2`** and **`r d_c3`** sales, respectively, indicating consistent market engagement.
+
+#### 4. Property Type Trends
+**`r res_building_t$neighborhood`**’ residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** and SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract affluent buyers. **`r villa_t$neighborhood`**’s villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, are popular among families. Commercial units in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor attention.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** cater to high-end buyers with prices peaking at **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** serve more budget-conscious buyers, with prices from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. On **`r l_d2`**, a **`r l_a2`** plot in **`r l_n2`** fetched **`r l_v2`**, highlighting demand for large development parcels.
+
+#### 7. Top Land Transactions by Value
+On **`r t_d1`**, **`r t_n1`** saw a **`r t_v1`** sale for **`r t_a1`** (**`r t_r1`** per sqm), a major land deal. **`r t_n2`** recorded a **`r t_v2`** sale for **`r t_a2`** (**`r t_r2`** per sqm) on **`r t_d2`**, reflecting strategic land acquisitions.
+
+
+
+###  REPORT-14
+
+#### 1. High-Value Transactions
+**`r hv_n1`**’s top transaction on **`r hv_d1`** was a **`r hv_a1`** unit sold for **`r hv_v1`**, or SAR **`r hv_r1`** per sqm. **`r hv_n2`** followed with a **`r hv_a2`** property sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, indicating robust luxury demand.
+
+#### 2. Premium Pricing by Neighborhood
+Prices in **`r p_n1`** average **`r p_r1`** per sqm, leading the market. **`r p_n2`** and **`r p_n3`** are next at **`r p_r2`** and **`r p_r3`** per sqm, respectively. **`r p_nl`** offers budget-friendly options at around **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** dominates with about **`r d_c1`** transactions, showcasing high buyer interest. **`r d_n2`** and **`r d_n3`** follow with **`r d_c2`** and **`r d_c3`** sales, respectively, reflecting sustained market momentum.
+
+#### 4. Property Type Trends
+In **`r res_building_t$neighborhood`**, residential buildings priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm draw premium buyers. **`r villa_t$neighborhood`**’s villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** to SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, cater to families. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, attract investors.
+
+#### 5. Pricing Segmentation
+**`r s_lux1`** and **`r s_lux2`** attract luxury buyers with prices up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** offer more affordable properties, with prices between **`r s_aff_min`** and **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, **`r l_n1`** recorded a **`r l_a1`** plot sale for **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** sold for **`r l_v2`** on **`r l_d2`**, highlighting demand for large plots.
+
+#### 7. Top Land Transactions by Value
+**`r t_n1`** saw a major **`r t_v1`** sale for **`r t_a1`** (**`r t_r1`** per sqm) on **`r t_d1`**. On **`r t_d2`**, **`r t_n2`** recorded a **`r t_v2`** transaction for **`r t_a2`** (**`r t_r2`** per sqm), reflecting strategic land acquisitions.
+
+
+
+###  REPORT-15
+
+#### 1. High-Value Transactions
+A **`r hv_a1`** unit in **`r hv_n1`** sold for **`r hv_v1`** (SAR **`r hv_r1`** per sqm) on **`r hv_d1`**, the highest recorded sale. On **`r hv_d2`**, **`r hv_n2`** saw a **`r hv_a2`** property fetch **`r hv_v2`** (SAR **`r hv_r2`** per sqm), signaling strong luxury market activity.
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** tops pricing at **`r p_r1`**, with **`r p_n2`** and **`r p_n3`** at **`r p_r2`** and **`r p_r3`**, respectively. **`r p_nl`** remains cost-effective, averaging **`r p_rl`**.
+
+#### 3. High-Demand Neighborhoods
+With around **`r d_c1`** transactions, **`r d_n1`** leads in buyer activity. **`r d_n2`** and **`r d_n3`** record **`r d_c2`** and **`r d_c3`** sales, respectively, reflecting ongoing market vitality.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, with prices from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, appeal to affluent buyers. Villas in **`r villa_t$neighborhood`**, priced between SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`**, are favored by families. **`r res_commercial_t$neighborhood`**’s commercial units, at SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor attention.
+
+#### 5. Pricing Segmentation
+Luxury markets in **`r s_lux1`** and **`r s_lux2`** see prices up to **`r s_lux_max`**, while **`r s_aff1`** and **`r s_aff2`** range from **`r s_aff_min`** to **`r s_aff_max`**, serving varied buyer needs.
+
+#### 6. Largest Plot Deals
+A **`r l_a1`** plot in **`r l_n1`** was sold for **`r l_v1`** (**`r l_r1`** per sqm) on **`r l_d1`**. **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, indicating interest in sizable land parcels.
+
+#### 7. Top Land Transactions by Value
+On **`r t_d1`**, **`r t_n1`** saw a significant **`r t_v1`** deal for **`r t_a1`** (**`r t_r1`** per sqm). **`r t_n2`** recorded a **`r t_v2`** sale for **`r t_a2`** (**`r t_r2`** per sqm) on **`r t_d2`**, showcasing strategic land investments.
+
+
+###  REPORT-16
+
+#### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** sqm unit in **`r hv_n1`** fetched  **`r hv_v1`**, equating to  **`r hv_r1`** per sqm, marking the top sale. **`r hv_n2`** saw a **`r hv_a2`** sqm property sold for  **`r hv_v2`** ( **`r hv_r2`**per sqm) on **`r hv_d2`**, reflecting strong interest in luxury real estate.
+
+
+#### 2. Premium Pricing by Neighborhood
+**`r p_n1`** leads with an average price of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers more affordable options, averaging around **`r p_rl`** per sqm
+
+#### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded approximately  **`r d_c1`** transactions, showcasing significant buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with about **`r d_c2`** and **`r d_c3`** sales, respectively, indicating robust market activity.
+
+#### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, attract upscale buyers. **`r villa_t$neighborhood`** villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, appeal to family buyers. Commercial properties in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor interest.
+
+#### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, where prices reach up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more budget-conscious buyers, with prices spanning **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+#### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, highlighting demand for sizable development land.
+
+
+#### 7. Top Land Transactions by Value
+A major transaction in **`r t_n1`** on **`r t_d1`**, saw **`r t_a1`** sold for **`r t_v1`** (SAR **`r t_a1`**), reflecting high-value acquisitions. **`r t_n2`** recorded a **`r t_a2`** plot sold for **`r t_r2`** (**`r t_a1`** per sqm) on **`r t_d2`**, indicating strategic investment opportunities.
+
+
+
+###  REPORT-17
+
+#### 1. High-Value Transactions
+
+On **`r hv_d1`**, a **`r hv_a1`** unit in **`r hv_n1`** fetched **`r hv_v1`** (SAR **`r hv_r1`** per sqm), the highest sale recorded. A **`r hv_a2`** property in **`r hv_n2`** sold for **`r hv_v2`** (SAR **`r hv_r2`** per sqm) on **`r hv_d2`**, signaling strong demand for premium real estate.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1`** leads with an average of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** remains cost-effective, averaging **`r p_rl`** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+**`r d_n1`** saw about **`r d_c1`** transactions, indicating high buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with roughly **`r d_c2`** and **`r d_c3`** transactions, respectively, reflecting ongoing market vitality.
+
+#### 4. Property Type Trends
+
+**`r res_building_t$neighborhood`** residential buildings, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",")`** to SAR **`r format(res_building_t$max_rate, big.mark = ",")`** per sqm, appeal to high-end buyers. Villas in **`r villa_t$neighborhood`**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")`** and SAR **`r format(villa_t$max_rate, big.mark = ",")`** per sqm, attract family buyers. Commercial units in **`r res_commercial_t$neighborhood`**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",")`** per sqm, are popular among investors.
+
+#### 5. Pricing Segmentation
+
+**`r s_lux1`** and **`r s_lux2`** attract luxury buyers with prices peaking at **`r s_lux_max`** per sqm. More affordable neighborhoods like **`r s_aff1`** and **`r s_aff2`** offer prices ranging from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+
+On **`r l_d1`**, a **`r l_a1`** plot in  **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). A **`r l_a2`** plot in **`r l_n2`** went for **`r l_v2`** on **`r l_d2`**, showing interest in large land for development.
+
+#### 7. Top Land Transactions by Value
+
+A major **`r t_v1`** sale for **`r t_a1`** (SAR **`r t_r1`** per sqm) was recorded in **`r t_n1`** on **`r t_d1`**. **`r t_n2`** saw a **`r t_v2`** transaction for **`r t_a2`** (SAR **`r t_r2`** per sqm) on **`r t_d2`**, highlighting strategic land acquisitions.
+
+
+###  REPORT-18
+
+#### 1. High-Value Transactions
+
+On **`r hv_d1 `**, a **`r hv_a1 `** property in **`r hv_n1 `** sold for **`r hv_v1 `** (SAR **`r hv_r1 `** per sqm), the highest deal. A **`r hv_a2 `** unit in **`r hv_n2 `** went for **`r hv_v2 `** (SAR **`r hv_r2 `** per sqm) on **`r hv_d2 `**, reflecting strong demand for premium properties.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1 `** averages **`r p_r1 `** per sqm, leading the market. **`r p_n2 `** and **`r p_n3 `** follow at **`r p_r2 `** and **`r p_r3` ** per sqm, respectively, while **`r p_nl `** offers more affordable pricing at **`r p_rl `** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+**`r d_n1 `** recorded around **`r d_c1` ** transactions, indicating robust buyer activity. **`r d_n2 `** and **`r d_n3 `** followed with approximately **`r d_c2 `** and **`r d_c3 `** sales, respectively, showing consistent market momentum.
+
+#### 4. Property Type Trends
+
+**`r res_building_t$neighborhood `**’s residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",") `** to SAR **`r format(res_building_t$max_rate, big.mark = ",") `** per sqm, attract high-end buyers. Villas in **`r villa_t$neighborhood `**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")` ** to SAR **`r format(villa_t$max_rate, big.mark = ",")` ** per sqm, are favored by families. Commercial units in **`r res_commercial_t$neighborhood `**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",") `** per sqm, draw investor interest.
+
+#### 5. Pricing Segmentation
+
+**`r s_lux1 `** and **`r s_lux2 `** target luxury buyers with prices reaching **`r s_lux_max` ** per sqm. More accessible areas like **`r s_aff1 `** and **`r s_aff2`** offer properties priced from **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+#### 6. Largest Plot Deals
+
+A **`r l_a1`** plot in **`r l_n1 `** sold for **`r l_v1 `** (SAR **`r l_r1 `** per sqm) on **`r l_d1` **. On **`r l_d2 `**, a **`r l_a2 `** plot in **`r l_n2 `** fetched **`r l_v2 `**, highlighting demand for large plots.
+
+#### 7. Top Land Transactions by Value
+
+A significant **`r t_v1 `** sale for **`r t_a1 `** (SAR **`r t_r1 `** per sqm) occurred in **`r t_n1 `** on **`r t_d1 `**. **`r t_n2 `** saw a **`r t_v2 `** deal for **`r t_a2 `** (SAR **`r t_r2 `** per sqm) on **`r t_d2 `**, indicating strategic land acquisitions.
+
+
+
+###  REPORT-19
+
+#### 1. High-Value Transactions
+
+A **`r hv_a1 `** unit in **`r hv_n1 `** fetched **`r hv_v1 `** (SAR **`r hv_r1 `** per sqm) on **`r hv_d1 `**, the top sale. On **`r hv_d2` **, a **`r hv_a2 `** property in **`r hv_n2 `** sold for **`r hv_v2 `** (SAR **`r hv_r2 `** per sqm), showcasing strong luxury market demand.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1 `** commands premium prices, averaging **`r p_r1 `** per sqm. **`r p_n2 `** and **`r p_n3 `** are priced at **`r p_r2 `** and **`r p_r3 `** per sqm, respectively, while **`r p_nl `** provides budget-friendly options at **`r p_rl `** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+With about **`r d_c1 `** sales, **`r d_n1 `** exhibits strong buyer interest. **`r d_n2 `** and **`r d_n3 `** follow with roughly **`r d_c2 `** and **`r d_c3 `** transactions, respectively, reflecting sustained market activity.
+
+#### 4. Property Type Trends
+
+Residential buildings in **`r res_building_t$neighborhood `**, priced from SAR **`r format(res_building_t$min_rate, big.mark = ",") `** to SAR **`r format(res_building_t$max_rate, big.mark = ",") `** per sqm, draw premium buyers. Villas in **`r villa_t$neighborhood `**, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",")` ** to SAR **`r format(villa_t$max_rate, big.mark = ",") `** per sqm, appeal to families. Commercial properties in **`r res_commercial_t$neighborhood `**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",") `** per sqm, attract investment interest.
+
+#### 5. Pricing Segmentation
+
+Luxury markets in **`r s_lux1 `** and **`r s_lux2 `** see prices up to **`r s_lux_max `** per sqm, while **`r s_aff1 `** and **`r s_aff2 `** offer more affordable properties, priced from **`r s_aff_min `** to **`r s_aff_max `** per sqm.
+
+#### 6. Largest Plot Deals
+
+On **`r l_d1 `**, a **`r l_a1 `** plot in **`r l_n1 `** was sold for **`r l_v1 `** (SAR **`r l_r1 `** per sqm). A **`r l_a2 `** plot in **`r l_n2 `** fetched **`r l_v2 `** on **`r l_d2 `**, signaling interest in sizable development land.
+
+#### 7. Top Land Transactions by Value
+
+A landmark **`r t_v1 `** deal for **`r t_a1 `** (SAR **`r t_r1 `** per sqm) was recorded in **`r t_n1 `** on **`r t_d1 `**. **`r t_n2 `** saw a **`r t_v2 `** transaction for **`r t_a2 `** (SAR **`r t_r2 `** per sqm) on **`r t_d2 `**, highlighting strategic investment opportunities.
+
+
+###  REPORT-20
+
+#### 1. High-Value Transactions
+
+On **`r hv_d1 `**, a **`r hv_a1 `** property in **`r hv_n1 `** sold for **`r hv_v1 `** (SAR **`r hv_r1 `** per sqm), marking the highest transaction. A **`r hv_a2 `** unit in **`r hv_n2 `** went for **`r hv_v2 `** (SAR **`r hv_r2 `** per sqm) on **`r hv_d2 `**, reflecting robust premium property demand.
+
+#### 2. Premium Pricing by Neighborhood
+
+**`r p_n1 `** tops the market with an average of **`r p_r1 `** per sqm. **`r p_n2 `** and **`r p_n3 `** follow at **`r p_r2 `** and **`r p_r3 `** per sqm, respectively, while **`r p_nl `** offers more accessible pricing at **`r p_rl `** per sqm.
+
+#### 3. High-Demand Neighborhoods
+
+**`r d_n1 `** recorded around **`r d_c1 `** transactions, showcasing significant buyer enthusiasm. **`r d_n2 `** and **`r d_n3 `** followed with approximately **`r d_c2 `** and **`r d_c3 `** sales, respectively, indicating consistent market engagement.
+
+#### 4. Property Type Trends
+
+**`r res_building_t$neighborhood `**’s residential buildings, priced between SAR **`r format(res_building_t$min_rate, big.mark = ",") `** to SAR **`r format(res_building_t$max_rate, big.mark = ",") `** per sqm, attract affluent buyers. **`r villa_t$neighborhood `**’s villas, ranging from SAR **`r format(villa_t$min_rate, big.mark = ",") `** to SAR **`r format(villa_t$max_rate, big.mark = ",") `** per sqm, are popular among families. Commercial units in **`r res_commercial_t$neighborhood `**, averaging SAR **`r format(res_commercial_t$avg_rate, big.mark = ",") `** per sqm, draw investor attention.
+
+#### 5. Pricing Segmentation
+
+**`r s_lux1 `** and **`r s_lux2 `** cater to high-end buyers with prices peaking at **`r s_lux_max `** per sqm. **`r s_aff1 `** and **`r s_aff2 `** serve more budget-conscious buyers, with prices from **`r s_aff_min `** to **`r s_aff_max `** per sqm.
+
+#### 6. Largest Plot Deals
+
+A **`r l_a1 `** plot in **`r l_n1 `** sold for **`r l_v1 `** (SAR **`r l_r1 `** per sqm) on **`r l_d1 `**. On **`r l_d2 `**, a **`r l_a2 `** plot in **`r l_n2 `** fetched **`r l_v2 `**, highlighting demand for large development parcels.
+
+#### 7. Top Land Transactions by Value
+
+On **`r t_d1 `**, **`r t_n1 `** saw a **`r t_v1 `** sale for **`r t_a1 `** (SAR **`r t_r1 `** per sqm), a major land deal. **`r t_n2 `** recorded a **`r t_v2 `** sale for **`r t_a2 `** (SAR **`r t_r2 `** per sqm) on **`r t_d2 `**, reflecting strategic land acquisitions.
+
+

@@ -1,0 +1,200 @@
+---
+output: html_document
+---
+
+# REPORT-1
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+library(dplyr)
+library(scales)
+library(openxlsx)
+library(lubridate)
+library(stringr)
+
+# Load and clean data once
+df <- read.xlsx("~/Unit_Trans_Report/unit_transactions_1750066298503 (2).xlsx") %>%
+  filter(OUTLIER == "No") %>%
+  mutate(
+    VALUE = as.numeric(`VALUE.(SAR)`),
+    AREA = as.numeric(`UNIT.AREA.(sqm)`),
+    RATE = as.numeric(`TRANSACTION.RATE.(SAR/sqm)`),
+    DATE = as.Date(`TRANSACTION.DATE`),
+    NEIGHBORHOOD = str_to_title(NEIGHBORHOOD),
+    ZONE = str_to_title(ZONE)
+  ) %>%
+  filter(!is.na(VALUE), !is.na(AREA), !is.na(RATE), !is.na(DATE), !is.na(NEIGHBORHOOD), !is.na(ZONE))
+
+#--------------- Point 1: High-Value Transactions
+# Get top 2 high-value transactions
+top_tx_hv <- df %>% arrange(desc(VALUE)) %>% slice(1:2)
+
+# Format values for sentence
+hv_n1 <- top_tx_hv$NEIGHBORHOOD[1]
+hv_a1 <- paste0(formatC(top_tx_hv$AREA[1], format = "f", digits = 0), " sqm")
+hv_v1 <- dollar(top_tx_hv$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+hv_r1 <- formatC(top_tx_hv$RATE[1], format = "f", digits = 0, big.mark = ",")
+hv_d1 <- format(top_tx_hv$DATE[1], "%B %d, %Y")
+
+hv_n2 <- top_tx_hv$NEIGHBORHOOD[2]
+hv_a2 <- paste0(formatC(top_tx_hv$AREA[2], format = "f", digits = 0), " sqm")
+hv_v2 <- dollar(top_tx_hv$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+hv_r2 <- formatC(top_tx_hv$RATE[2], format = "f", digits = 0, big.mark = ",")
+hv_d2 <- format(top_tx_hv$DATE[2], "%B %d, %Y")
+
+#--------------- Point 2: Premium Pricing by Neighborhood
+# Average rate per neighborhood
+rate_by_neigh_p <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(avg_rate = mean(RATE, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(avg_rate))
+
+# Top 3 premium neighborhoods
+top3_p <- rate_by_neigh_p %>% slice(1:3)
+# One affordable neighborhood
+low1_p <- rate_by_neigh_p %>% slice_tail(n = 1)
+
+# Format values (round to nearest hundred)
+p_n1 <- top3_p$NEIGHBORHOOD[1]
+p_r1 <- paste0("SAR ", formatC(round(top3_p$avg_rate[1], -2), format = "f", digits = 0, big.mark = ","))
+p_n2 <- top3_p$NEIGHBORHOOD[2]
+p_r2 <- paste0("SAR ", formatC(round(top3_p$avg_rate[2], -2), format = "f", digits = 0, big.mark = ","))
+p_n3 <- top3_p$NEIGHBORHOOD[3]
+p_r3 <- paste0("SAR ", formatC(round(top3_p$avg_rate[3], -2), format = "f", digits = 0, big.mark = ","))
+p_nl <- low1_p$NEIGHBORHOOD
+p_rl <- paste0("SAR ", formatC(round(low1_p$avg_rate, -2), format = "f", digits = 0, big.mark = ","))
+
+#--------------- Point 3: High-Demand Neighborhoods
+# Count transactions per neighborhood
+txn_counts_d <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  arrange(desc(count))
+
+# Get top 3 neighborhoods
+top3_d <- txn_counts_d %>% slice(1:3)
+
+# Extract values and round counts
+d_n1 <- top3_d$NEIGHBORHOOD[1]
+d_c1 <- round(top3_d$count[1], -1)  # nearest 10
+d_n2 <- top3_d$NEIGHBORHOOD[2]
+d_c2 <- round(top3_d$count[2], -1)
+d_n3 <- top3_d$NEIGHBORHOOD[3]
+d_c3 <- round(top3_d$count[3], -1)
+
+#--------------- Point 4: Property Type Trends
+# Function to get zone-level top neighborhood and rate summary
+get_zone_summary <- function(zone_name) {
+  zone_df <- df %>% filter(ZONE == zone_name)
+  top_neigh <- zone_df %>%
+    group_by(NEIGHBORHOOD) %>%
+    summarise(n = n(), avg_rate = mean(RATE), .groups = "drop") %>%
+    arrange(desc(n)) %>%
+    slice(1) %>%
+    pull(NEIGHBORHOOD)
+  stats <- zone_df %>%
+    filter(NEIGHBORHOOD == top_neigh) %>%
+    summarise(
+      min_rate = min(RATE, na.rm = TRUE),
+      max_rate = max(RATE, na.rm = TRUE),
+      avg_rate = mean(RATE, na.rm = TRUE)
+    )
+  list(
+    neighborhood = top_neigh,
+    min_rate = round(stats$min_rate),
+    max_rate = round(stats$max_rate),
+    avg_rate = round(stats$avg_rate)
+  )
+}
+
+# Get summaries for each zone
+res_building_t <- get_zone_summary("Residential Building")
+villa_t <- get_zone_summary("Single Family Villa")
+commercial_t <- get_zone_summary("Commercial")
+
+#--------------- Point 5: Pricing Segmentation
+# Get max/min rate by neighborhood
+rate_by_neigh_s <- df %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(
+    max_rate = max(RATE, na.rm = TRUE),
+    min_rate = min(RATE, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(max_rate))
+
+# Get top 2 luxury and 2 affordable neighborhoods
+luxury_s <- rate_by_neigh_s %>% slice(1:2)
+affordable_s <- rate_by_neigh_s %>% arrange(max_rate) %>% slice(1:2)
+
+# Format values
+s_lux1 <- luxury_s$NEIGHBORHOOD[1]
+s_lux2 <- luxury_s$NEIGHBORHOOD[2]
+s_lux_max <- paste0("SAR ", formatC(round(max(luxury_s$max_rate), -2), format = "f", digits = 0, big.mark = ","))
+s_aff1 <- affordable_s$NEIGHBORHOOD[1]
+s_aff2 <- affordable_s$NEIGHBORHOOD[2]
+s_aff_min <- paste0("SAR ", formatC(round(min(affordable_s$min_rate), -2), format = "f", digits = 0, big.mark = ","))
+s_aff_max <- paste0("SAR ", formatC(round(max(affordable_s$max_rate), -2), format = "f", digits = 0, big.mark = ","))
+
+#--------------- Point 6: Largest Plot Deals
+# Get top 2 largest unit area transactions
+top_large_plots_l <- df %>%
+  arrange(desc(AREA)) %>%
+  slice(1:2)
+
+# Extract and format data
+l_n1 <- top_large_plots_l$NEIGHBORHOOD[1]
+l_v1 <- dollar(top_large_plots_l$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+l_a1 <- paste0(formatC(top_large_plots_l$AREA[1], format = "f", digits = 0), " sqm")
+l_r1 <- paste0("SAR ", formatC(round(top_large_plots_l$RATE[1], 0), big.mark = ","))
+l_d1 <- format(top_large_plots_l$DATE[1], "%B %d, %Y")
+
+l_n2 <- top_large_plots_l$NEIGHBORHOOD[2]
+l_v2 <- dollar(top_large_plots_l$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+l_a2 <- paste0(formatC(top_large_plots_l$AREA[2], format = "f", digits = 0), " sqm")
+l_r2 <- paste0("SAR ", formatC(round(top_large_plots_l$RATE[2], 0), big.mark = ","))
+l_d2 <- format(top_large_plots_l$DATE[2], "%B %d, %Y")
+
+#--------------- Point 7: Top Land Transactions by Value
+# Top 2 transactions by value
+top_tx_t <- df %>%
+  arrange(desc(VALUE)) %>%
+  slice(1:2)
+
+# Extract and format first transaction
+t_n1 <- top_tx_t$NEIGHBORHOOD[1]
+t_d1 <- format(top_tx_t$DATE[1], "%B %d, %Y")
+t_v1 <- dollar(top_tx_t$VALUE[1], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+t_a1 <- paste0(formatC(top_tx_t$AREA[1], format = "f", digits = 0, big.mark = ","), " sqm")
+t_r1 <- paste0("SAR ", formatC(round(top_tx_t$RATE[1], 0), format = "f", big.mark = ","))
+
+# Extract and format second transaction
+t_n2 <- top_tx_t$NEIGHBORHOOD[2]
+t_d2 <- format(top_tx_t$DATE[2], "%B %d, %Y")
+t_v2 <- dollar(top_tx_t$VALUE[2], prefix = "SAR ", big.mark = ",", largest_with_cents = Inf)
+t_a2 <- paste0(formatC(top_tx_t$AREA[2], format = "f", digits = 0, big.mark = ","), " sqm")
+t_r2 <- paste0("SAR ", formatC(round(top_tx_t$RATE[2], 0), format = "f", big.mark = ","))
+```
+
+### 1. High-Value Transactions
+On **`r hv_d1`**, a **`r hv_a1`** sqm unit in **`r hv_n1`** fetched  **`r hv_v1`**, equating to  **`r hv_r1`** per sqm, marking the top sale. **`r hv_n2`** saw a **`r hv_a2`** sqm property sold for  **`r hv_v2`** ( **`r hv_r2`**per sqm) on **`r hv_d2`**, reflecting strong interest in luxury real estate.
+
+
+### 2. Premium Pricing by Neighborhood
+**`r p_n1`** leads with an average price of **`r p_r1`** per sqm, followed by **`r p_n2`** at **`r p_r2`** per sqm and **`r p_n3`** at **`r p_r3`** per sqm. **`r p_nl`** offers more affordable options, averaging around **`r p_rl`** per sqm
+
+### 3. High-Demand Neighborhoods
+**`r d_n1`** recorded approximately  **`r d_c1`** transactions, showcasing significant buyer enthusiasm. **`r d_n2`** and **`r d_n3`** followed with about **`r d_c2`** and **`r d_c3`** sales, respectively, indicating robust market activity.
+
+### 4. Property Type Trends
+Residential buildings in **`r res_building_t$neighborhood`**, priced between SAR **`r formatC(res_building_t$min_rate, big.mark = ",")`** to SAR **`r formatC(res_building_t$max_rate, big.mark = ",")`** per sqm, attract upscale buyers. **`r villa_t$neighborhood`** villas, ranging from SAR **`r formatC(villa_t$min_rate, big.mark = ",")`** and SAR **`r formatC(villa_t$max_rate, big.mark = ",")`** per sqm, appeal to family buyers. Commercial properties in **`r commercial_t$neighborhood`**, averaging SAR **`r formatC(commercial_t$avg_rate, big.mark = ",")`** per sqm, draw investor interest.
+
+### 5. Pricing Segmentation
+Luxury buyers focus on **`r s_lux1`** and **`r s_lux2`**, where prices reach up to **`r s_lux_max`** per sqm. **`r s_aff1`** and **`r s_aff2`** cater to more budget-conscious buyers, with prices spanning **`r s_aff_min`** to **`r s_aff_max`** per sqm.
+
+
+### 6. Largest Plot Deals
+On **`r l_d1`**, a **`r l_a1`** plot in **`r l_n1`** sold for **`r l_v1`** (**`r l_r1`** per sqm). **`r l_n2`** recorded a **`r l_a2`** plot sale for **`r l_v2`** on **`r l_d2`**, highlighting demand for sizable development land.
+
+
+### 7. Top Land Transactions by Value
+A major transaction in **`r t_n1`** on **`r t_d1`**, saw **`r t_a1`** sold for **`r t_v1`** (SAR **`r t_a1`**), reflecting high-value acquisitions. **`r t_n2`** recorded a **`r t_a2`** plot sold for **`r t_r2`** (**`r t_a1`** per sqm) on **`r t_d2`**, indicating strategic investment opportunities.

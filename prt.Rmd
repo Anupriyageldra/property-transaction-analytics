@@ -1,0 +1,806 @@
+---
+title: "sample"
+output: html_document
+---
+
+```{r,echo = FALSE, message = FALSE, warning = FALSE}
+
+library(openxlsx)
+library(dplyr)
+library(lubridate)
+library(knitr)
+
+# Read the data
+df <- read.xlsx("E://narration//5.Property transaction//property_transactions_1750066258149.xlsx")
+colnames(df) <- make.names(colnames(df))
+
+# Ensure TRANSACTION.DATE is in Date format
+df$TRANSACTION.DATE <- as.Date(df$TRANSACTION.DATE)
+
+# Determine data period dynamically
+date_range <- range(df$TRANSACTION.DATE, na.rm = TRUE)
+start_date <- format(min(date_range), "%d %B %Y")
+end_date <- format(max(date_range), "%d %B %Y")
+
+# Calculate highest-value transactions
+highest_trans <- df %>%
+  arrange(desc(VALUE..SAR.)) %>%
+  slice_head(n = 2) %>%
+  mutate(
+    rate_per_sqm = PROPERTY.TRANSACTION.RATE..SAR.sqm.,
+    area_sqm = TRANSACTION.AREA..sqm.,
+    value_sar = format(VALUE..SAR., big.mark = ",", scientific = FALSE),
+    zone_text = ifelse(is.na(ZONE), NEIGHBORHOOD, ZONE),
+    prop_type = ifelse(is.na(PROPERTY.TYPE.ESTATER), "Unknown", PROPERTY.TYPE.ESTATER)
+  )
+
+# Extract details for first and second highest transactions
+first_trans <- highest_trans[1, ]
+second_trans <- highest_trans[2, ]
+
+first_value <- first_trans$value_sar
+first_area <- first_trans$area_sqm
+first_area <- format(first_area, scientific = FALSE, big.mark = ",")
+first_rate <- sprintf("%.1f", first_trans$rate_per_sqm)
+first_zone <- first_trans$zone_text
+first_prop_type <- first_trans$prop_type
+
+second_value <- second_trans$value_sar
+second_area <- second_trans$area_sqm
+second_rate <- sprintf("%.1f", second_trans$rate_per_sqm)
+second_zone <- second_trans$zone_text
+second_prop_type <- second_trans$prop_type
+
+# Calculate average rate per sqm by neighborhood
+neighborhood_rates <- df %>%
+  filter(!is.na(NEIGHBORHOOD), !is.na(PROPERTY.TRANSACTION.RATE..SAR.sqm.)) %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(
+    avg_rate = mean(PROPERTY.TRANSACTION.RATE..SAR.sqm., na.rm = TRUE),
+    avg_area = mean(TRANSACTION.AREA..sqm., na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(avg_rate)) %>%
+  slice_head(n = 3)
+
+# Extract top neighborhoods
+top1_neigh <- neighborhood_rates$NEIGHBORHOOD[1]
+top1_rate <- sprintf("%.1f", neighborhood_rates$avg_rate[1])
+top1_area <- sprintf("%.0f", neighborhood_rates$avg_area[1])
+
+top2_neigh <- neighborhood_rates$NEIGHBORHOOD[2]
+top2_rate <- sprintf("%.1f", neighborhood_rates$avg_rate[2])
+
+top3_neigh <- neighborhood_rates$NEIGHBORHOOD[3]
+top3_rate <- sprintf("%.1f", neighborhood_rates$avg_rate[3])
+
+# Calculate transaction volume by neighborhood
+trans_volume <- df %>%
+  filter(!is.na(NEIGHBORHOOD), PROPERTY.TYPE.ESTATER == "Residential Building" | PROPERTY.TYPE.AS.PER.GOVERNMENT.RECORD == "land") %>%
+  group_by(NEIGHBORHOOD) %>%
+  summarise(
+    trans_count = n(),
+    avg_rate = mean(PROPERTY.TRANSACTION.RATE..SAR.sqm., na.rm = TRUE),
+    min_rate = min(PROPERTY.TRANSACTION.RATE..SAR.sqm., na.rm = TRUE),
+    max_rate = max(PROPERTY.TRANSACTION.RATE..SAR.sqm., na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(trans_count)) %>%
+  slice_head(n = 2)
+
+# Extract details
+most_trans_neigh <- trans_volume$NEIGHBORHOOD[1]
+most_trans_count <- trans_volume$trans_count[1]
+most_trans_min_rate <- sprintf("%.1f", trans_volume$min_rate[1])
+most_trans_max_rate <- sprintf("%.1f", trans_volume$max_rate[1])
+
+second_trans_neigh <- trans_volume$NEIGHBORHOOD[2]
+second_trans_rate <- sprintf("%.1f", trans_volume$avg_rate[2])
+
+# Calculate block performance
+block_stats <- df %>%
+  filter(!is.na(BLOCK)) %>%
+  group_by(BLOCK) %>%
+  summarise(
+    avg_rate = mean(PROPERTY.TRANSACTION.RATE..SAR.sqm., na.rm = TRUE),
+    total_value = sum(VALUE..SAR., na.rm = TRUE),
+    prop_types = n_distinct(PROPERTY.TYPE.ESTATER, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_value)) %>%
+  slice_head(n = 3)
+
+# Extract block details
+block1 <- block_stats$BLOCK[1]
+block1_rate <- sprintf("%.1f", block_stats$avg_rate[1])
+block1_value <- format(block_stats$total_value[1], big.mark = ",", scientific = FALSE)
+
+block2 <- block_stats$BLOCK[2]
+block2_value <- format(block_stats$total_value[2], big.mark = ",", scientific = FALSE)
+
+block3 <- block_stats$BLOCK[3]
+block3_rate <- sprintf("%.1f", block_stats$avg_rate[3])
+
+# Summarize by zone
+zone_stats <- df %>%
+  filter(!is.na(ZONE)) %>%
+  group_by(ZONE) %>%
+  summarise(
+    avg_rate = mean(PROPERTY.TRANSACTION.RATE..SAR.sqm., na.rm = TRUE),
+    trans_count = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(avg_rate))
+
+top_zone <- zone_stats$ZONE[1]
+top_zone_rate <- sprintf("%.1f", zone_stats$avg_rate[1])
+```
+
+# 🏨  REPORT 1 :Residential and Commercial Property Transactions Analysis
+
+## Market Insights for Strategic Investment  
+**Data Period: `r start_date` - `r end_date`**
+
+This investment briefing highlights Riyadh’s real estate landscape from **`r start_date`** to **`r end_date`**, emphasizing **high-yield investment zones** and **premium opportunities** for developers. We examine transaction values, pricing trends, and volumes to identify strategic hotspots for immediate and future gains.
+
+---
+
+## 1. 💰 Highest-Value Transactions  
+The Riyadh market proved **highly lucrative for large-scale investors**:
+
+- **`r first_zone`** (**`r first_prop_type`**): SAR `r first_value` for `r first_area` sqm (**SAR `r first_rate`**/sqm)
+- **`r second_zone`** (**`r second_prop_type`**): SAR `r second_value` for `r second_area` sqm (**SAR `r second_rate`**/sqm)
+
+📌 **Investment Insight:**  
+Invest in **`r first_zone`** for **expansion projects** and leverage **`r second_zone`** for **luxury returns**.
+
+---
+
+## 2. 📈 Premium Pricing by Neighborhood  
+Pricing leaders command investor focus:
+
+- **`r top1_neigh`**: SAR `r top1_rate`/sqm (average area: `r top1_area` sqm)
+- **`r top2_neigh`**: SAR `r top2_rate`/sqm
+
+**Top 3 Neighborhoods by Average Rate:**
+
+- **`r top1_neigh`** – SAR `r top1_rate`/sqm  
+- **`r top2_neigh`** – SAR `r top2_rate`/sqm  
+- **`r top3_neigh`** – SAR `r top3_rate`/sqm  
+
+💡 **Recommendation:**  
+Focus **capital deployment** in **`r top1_neigh`** and **`r top2_neigh`** for **premium margins** and **reliable exit strategies**.
+
+---
+
+## 3. 🏨 High-Volume Residential Demand  
+Where demand drives continuous turnover:
+
+- **`r most_trans_neigh`**: `r most_trans_count` transactions (**SAR `r most_trans_min_rate` – `r most_trans_max_rate`**/sqm)
+- **`r second_trans_neigh`**: SAR `r second_trans_rate`/sqm
+
+📌 **Opportunity:**  
+**`r most_trans_neigh`** = **foundation for scalable residential development**.
+
+---
+
+## 4. 🧱 Best Blocks for Investment  
+Strategic blocks with powerful potential:
+
+- **`r block1`**: SAR `r block1_rate`/sqm | Value SAR `r block1_value`
+- **`r block2`**: Value SAR `r block2_value`
+- **`r block3`**: SAR `r block3_rate`/sqm
+
+🏏 **Strategy:**  
+Leverage **`r block1`** for **portfolio growth** and **`r block2`** for **stable cash flow**.
+
+---
+
+## 5. 🏙️ Zoning Insights  
+Zoning defines **where capital can multiply**:
+
+- **Residential Buildings:** dominate transaction counts.
+- **Residential Plots:** e.g., **`r top_zone`** at SAR `r top_zone_rate`/sqm – **scarcity = appreciation**.
+- **Industrial Zones:** require further exploration.
+
+📈 **Zoning Priorities:**
+
+- **Residential Plots** – **Strong ROI potential**  
+- **Residential Buildings** – **Stable development pipelines**
+
+📌 **Focus:**  
+Prioritize plots in **`r top_zone`** for **capital growth** and **`r most_trans_neigh`** for **stable revenue**.
+
+---
+
+## 🧱 Strategic Recommendations
+
+- **Premium Investment**: Plots in **`r top1_neigh`** or **`r top2_neigh`**
+- **Volume-Driven Growth**: Housing in **`r most_trans_neigh`**
+- **Diversified Portfolio**: Explore **`r block2`** for mixed projects
+- **Cautious Approach**: Monitor **`r top_zone`** for industrial potential
+
+---
+
+## 🛣️ Urban Planning Implications
+
+- **Scalable Housing**: **`r most_trans_neigh`** and **`r second_trans_neigh`**  
+- **Premium Developments**: **`r top1_neigh`**  
+- **Infrastructure Alignment**: Match with Riyadh’s growth strategy
+
+---
+
+## ✅ Conclusion
+
+This analysis highlights **`r top1_neigh`**, **`r top2_neigh`**, and **`r most_trans_neigh`** as prime investment opportunities in Riyadh.  
+Investors should align with local planning for **maximum future returns**.
+
+
+# 🏨  Report 2 : Residential and Commercial Property Transactions Analysis
+
+## Market Insights for Strategic Investment  
+**Data Period: `r start_date` - `r end_date`**
+
+This report presents a structured assessment of Riyadh’s real estate transactions between **`r start_date`** and **`r end_date`**. The following insights provide clear guidance for stakeholders on premium investments, residential market dynamics, and zoning trends.
+
+---
+
+## 1. 💰 Highest-Value Transactions  
+The Riyadh market demonstrated robust demand for premium transactions:
+
+- **`r first_zone`** (**`r first_prop_type`**): SAR `r first_value` for `r first_area` sqm (**SAR `r first_rate`**/sqm)
+- **`r second_zone`** (**`r second_prop_type`**): SAR `r second_value` for `r second_area` sqm (**SAR `r second_rate`**/sqm)
+
+📌 **Action Point:** Target large-scale developments in **`r first_zone`** and **`r second_zone`**.
+
+---
+
+## 2. 📈 Premium Pricing by Neighborhood  
+Key neighborhoods showcasing premium transaction rates:
+
+- **`r top1_neigh`**: SAR `r top1_rate`/sqm (average area: `r top1_area` sqm)
+- **`r top2_neigh`**: SAR `r top2_rate`/sqm
+
+**Top 3 Neighborhoods by Average Rate:**
+
+- **`r top1_neigh`** – SAR `r top1_rate`/sqm  
+- **`r top2_neigh`** – SAR `r top2_rate`/sqm  
+- **`r top3_neigh`** – SAR `r top3_rate`/sqm  
+
+💡 **Recommendation:** Premium residential or mixed-use development advised in **`r top1_neigh`** and **`r top2_neigh`**.
+
+---
+
+## 3. 🏨 High-Volume Residential Demand  
+Stability in residential demand evidenced by:
+
+- **`r most_trans_neigh`**: `r most_trans_count` transactions (**SAR `r most_trans_min_rate`–`r most_trans_max_rate`/sqm**)
+- **`r second_trans_neigh`**: SAR `r second_trans_rate`/sqm
+
+📌 **Opportunity:** Emphasize affordable/mid-tier housing in **`r most_trans_neigh`**.
+
+---
+
+## 4. 🧱 Best Blocks for Investment  
+Strategically important blocks:
+
+- **`r block1`**: SAR `r block1_rate`/sqm | Total Value: SAR `r block1_value`
+- **`r block2`**: Total Value: SAR `r block2_value`
+- **`r block3`**: SAR `r block3_rate`/sqm
+
+🏏 **Strategy:** Prioritize phased investments across **`r block1`** and **`r block2`** for optimal ROI.
+
+---
+
+## 5. 🏙️ Zoning Insights  
+Zoning data emphasizes:
+
+- **Residential Buildings:** Dominant in volume.
+- **Residential Plots:** High scarcity, **SAR `r top_zone_rate`**/sqm at **`r top_zone`**.
+- **Industrial Zones:** Require additional feasibility.
+
+📌 **Focus:** Target residential plots for growth and buildings for sustained yield.
+
+---
+
+## 🧱 Strategic Recommendations
+
+- Acquire premium plots in **`r top1_neigh`** or **`r top2_neigh`**
+- Develop residential projects in **`r most_trans_neigh`**
+- Diversify with **`r block2`** to balance risk and return
+- Monitor **`r top_zone`** for potential conversion to high-yield industrial zones
+
+---
+
+## 🛣️ Urban Planning Implications
+
+- **Scalable Housing:** Prioritize **`r most_trans_neigh`** and **`r second_trans_neigh`**  
+- **Premium Market:** Capitalize on **`r top1_neigh`**  
+- **Alignment:** Coordinate with Riyadh’s strategic urban growth framework
+
+---
+
+## ✅ Conclusion
+
+This analysis highlights **`r top1_neigh`**, **`r top2_neigh`**, and **`r most_trans_neigh`** as primary investment destinations. Stakeholders should align development initiatives with urban planning to maximize sustained returns.
+
+
+
+
+# Report 3 : Residential and Commercial Property Transactions Analysis
+
+## Market Overview for Strategic Investment  
+**Data Period: `r start_date` - `r end_date`**
+
+This report provides a comprehensive summary of property transactions across Riyadh during the reporting period. The insights shared here highlight areas of significant investor interest, premium pricing trends by locality, residential demand potential, zoning-based prioritizations, and strategic considerations for future urban development alignment.
+
+## Summary of Findings
+
+- Significant activity observed in both large-scale residential building transactions and targeted land plot acquisitions.
+- Premium rates are concentrated in specific neighborhoods, demonstrating a clear correlation between pricing power and locality prestige.
+- Residential demand remains consistent in selected neighborhoods, particularly in affordable and mid-tier categories.
+- High transaction volumes concentrated around residential building zones, underscoring their dominance in the current market profile.
+- Best performing blocks by value offer reliable growth potential for strategic developments.
+- Zoning analysis further underscores the viability of focusing on residential plots for long-term capital appreciation.
+
+## 1. Highest-Value Transactions
+
+- First highest-value transaction took place in `r first_zone` involving a `r first_prop_type` asset, valued at SAR `r first_value` over `r first_area` sqm. Transaction rate: SAR `r first_rate` per sqm.
+- Second highest-value transaction occurred in `r second_zone` with a `r second_prop_type` asset, valued at SAR `r second_value` for `r second_area` sqm. Transaction rate: SAR `r second_rate` per sqm.
+- Recommendation: Focus premium investment attention on these zones for high capital project developments.
+
+## 2. Premium Pricing by Neighborhood
+
+- Neighborhood with highest average price per sqm is `r top1_neigh` at SAR `r top1_rate`/sqm, with an average area of `r top1_area` sqm.
+- Second highest is `r top2_neigh` at SAR `r top2_rate`/sqm, followed by `r top3_neigh` at SAR `r top3_rate`/sqm.
+- Recommendation: Al Nakhil and AR RAHMANIYAH stand out as strategic areas for high-value residential or mixed-use property development.
+
+## 3. High-Volume Residential Demand
+
+- Leading neighborhood for transaction count is `r most_trans_neigh`, with `r most_trans_count` transactions at rates between SAR `r most_trans_min_rate` and SAR `r most_trans_max_rate` per sqm.
+- Second highest in transaction volume is `r second_trans_neigh` at SAR `r second_trans_rate` per sqm.
+- Recommendation: Target AN NADHEEM for residential development that balances affordability with scalability for high absorption rates.
+
+## 4. Best Blocks for Investment
+
+- `r block1`: Valued at SAR `r block1_value` with an average rate of SAR `r block1_rate`/sqm.
+- `r block2`: Total value of SAR `r block2_value`.
+- `r block3`: Average rate of SAR `r block3_rate`/sqm.
+- Recommendation: Focus on AN NARJIS and AN NADHEEM for balanced risk-return investments. HITTEEN presents development potential for future-oriented projects.
+
+## 5. Zoning Insights
+
+- Residential Buildings dominate market volume, emphasizing stability in recurring transactions.
+- Residential Plots, exemplified by the Residential commercial zone at SAR `r top_zone_rate`/sqm, suggest significant long-term appreciation potential.
+- Industrial Zones remain largely untapped and require further feasibility analysis for future project identification.
+- Recommendation: Priority should be given to residential plot acquisitions for future appreciation; residential buildings provide ongoing revenue potential.
+
+## Strategic Recommendations
+
+1. Pursue premium residential projects in Al Nakhil and AR RAHMANIYAH for top-margin outcomes.
+2. Leverage the high-volume, mid-tier demand in AN NADHEEM for steady absorption.
+3. Combine development strategies in AN NADHEEM and AN NARJIS for diversified returns.
+4. Conduct focused assessments on Residential commercial zones for potential industrial conversion.
+
+## Urban Planning Implications
+
+- Focus affordable housing projects in AN NADHEEM and AL JANADRIYAH to meet scalable demand.
+- Align premium development strategies with emerging infrastructure initiatives around Al Nakhil.
+- Monitor municipal development plans to ensure alignment of projects with Riyadh’s long-term growth objectives.
+
+## Conclusion
+
+This comprehensive analysis highlights Al Nakhil, AR RAHMANIYAH, and AN NADHEEM as the leading investment zones within Riyadh for 2024. Investors and developers are encouraged to align strategies with these findings for maximum capital growth, sustained returns, and strategic urban planning harmony.
+
+
+
+
+# REPORT 4 : Residential and Commercial Property Transactions Analysis
+
+## Riyadh Property Market: The Full Picture  
+**Analysis Period: `r start_date` - `r end_date`**
+
+The real estate sector of Riyadh during this reporting window revealed compelling narratives of growth, opportunity, and evolving market dynamics. Riyadh, recognized as the financial and administrative hub of Saudi Arabia, has benefited from Vision 2030 initiatives promoting real estate, tourism, and infrastructure growth. The city's proactive government policies, coupled with substantial urbanization efforts, have driven both domestic and foreign investment in the sector. These trends, combined with the stability of the local economy and infrastructure expansion, have collectively bolstered investor confidence.
+
+This narrative synthesizes the most critical trends shaping the investment horizon across neighborhoods, transaction types, and pricing behaviors.
+
+## Investment Highlights
+
+- Major real estate transactions underline sustained confidence in Riyadh's large-scale property developments.
+- Premium rates are concentrated in established high-prestige neighborhoods, underlining their ongoing desirability.
+- Demand for mid-market residential offerings remains robust, providing fertile ground for strategic developments aimed at affordability without compromising return potential.
+- Best-performing locations reflect a balance of immediate value and long-term appreciation.
+
+## Highest-Value Transactions: Where the Big Deals Happen
+
+- The standout transaction was recorded in `r first_zone`, classified under `r first_prop_type`, reaching SAR `r first_value` across `r first_area` square meters. A robust rate of SAR `r first_rate` per sqm was achieved.
+- Following closely, the next prominent deal occurred in `r second_zone`, involving a `r second_prop_type`, with a valuation of SAR `r second_value` over `r second_area` sqm, priced at SAR `r second_rate` per sqm.
+- These localities are not only significant because of their transaction volumes, but also due to their strategic positions within Riyadh’s broader urban fabric. Both areas benefit from proximity to major business districts, easy access to key transportation arteries, and adjacency to planned infrastructure projects under the Riyadh Development Plan. These locational advantages contribute to their attractiveness for high-capital investment and ensure sustained demand moving forward.
+
+These high-value deals provide clear guidance: prioritize these localities for ventures that seek to maximize exposure to premium market dynamics.
+
+## Neighborhood Pricing: Premium Value Clusters
+
+- `r top1_neigh` led all neighborhoods in average price per sqm at SAR `r top1_rate`, supported by a generous average transaction size of `r top1_area` sqm.
+- `r top2_neigh` followed at SAR `r top2_rate` per sqm, while `r top3_neigh` rounded out the leading trio at SAR `r top3_rate`.
+
+What makes these neighborhoods command such premiums? Beyond their advantageous geographic locations, these areas often feature a confluence of desirable lifestyle factors. These include access to elite educational institutions, internationally branded retail outlets, premium dining experiences, and a reputation for safety and community prestige. Furthermore, these localities frequently serve as hubs for Riyadh’s affluent population, ensuring strong, consistent demand and preserving the upward trajectory of real estate values. The synergy of lifestyle amenities with robust civic infrastructure solidifies their role as focal points for high-end residential investment.
+
+These pricing trends reinforce the investment appeal of `r top1_neigh` and `r top2_neigh` for sophisticated, high-margin project planning.
+
+## Residential Demand: Activity in Motion
+
+- `r most_trans_neigh` saw the highest number of transactions at `r most_trans_count`, spanning rates between SAR `r most_trans_min_rate` and SAR `r most_trans_max_rate` per sqm.
+- `r second_trans_neigh` followed as the next-most-active zone, trading at SAR `r second_trans_rate` per sqm.
+- Market Insight: Concentrating developments in `r most_trans_neigh` can facilitate scalable, mid-tier housing opportunities with predictable uptake.
+
+## Top Blocks for Investment Potential
+
+- `r block1` emerged as a focal point for investment, trading at SAR `r block1_rate` per sqm with a staggering transaction total of SAR `r block1_value`.
+- `r block2` closely followed with a total of SAR `r block2_value` in transaction volume.
+- `r block3` offered strategic pricing of SAR `r block3_rate` per sqm, making it suitable for longer-term development plays.
+
+## Zoning: Framing the Next Wave of Growth
+
+- Residential Buildings constitute the backbone of Riyadh's transaction ecosystem.
+- Residential Plots, highlighted by the Residential commercial area at SAR `r top_zone_rate` per sqm, offer a gateway to substantial appreciation in the coming years.
+- Industrial zones remain largely unexplored and will benefit from targeted feasibility reviews before significant investment.
+
+As Riyadh’s urban footprint expands, zoning designations will increasingly be influenced by evolving municipal policies focused on long-term urban sustainability. Anticipated shifts include increased allocation of mixed-use developments, integration of commercial corridors with residential clusters, and adjustments to accommodate Riyadh’s projected population growth. Additionally, infrastructure projects such as new metro lines, arterial road improvements, and proximity to economic development zones are likely to play a pivotal role in shaping zoning reforms. For developers and investors, aligning project planning with these evolving zoning frameworks will be crucial to capitalize on future growth trajectories and maximize return on investment.
+
+- Strategic takeaway: focus initial efforts on Residential Plots while monitoring the Industrial segment for future expansion avenues.
+
+## Action-Oriented Recommendations
+
+1. Deploy high-margin residential projects in `r top1_neigh` and `r top2_neigh` for optimal premium segment capture.
+2. Design affordable, high-absorption housing in `r most_trans_neigh` for predictable, medium-term returns.
+3. Diversify holdings with investments in both `r block2` and `r block3` to hedge against market fluctuations.
+4. Establish focused planning teams to evaluate the Residential commercial zones for potential adaptive re-use or industrial conversion opportunities.
+
+## Planning Implications and Conclusion
+
+Urban planning considerations remain paramount. Developers should position scalable, community-driven projects in `r most_trans_neigh` and `r second_trans_neigh` while simultaneously targeting premium segment returns in `r top1_neigh`. Alignment with city-wide infrastructure expansion strategies will be crucial for maximizing future value.
+
+In sum, `r top1_neigh`, `r top2_neigh`, and `r most_trans_neigh` represent the strongest beacons for Riyadh’s ongoing real estate evolution. Aligning investment decisions with these findings ensures well-grounded participation in the city’s growth story.
+
+
+
+
+#  REPORT 5 : Residential and Commercial Property Transactions Analysis
+
+## Riyadh Property Market Outlook: Scenario-Based Assessment  
+**Analysis Period: `r start_date` - `r end_date`**
+
+The Riyadh real estate market is entering a transformative phase influenced by ongoing infrastructure projects, Vision 2030 objectives, and dynamic population growth. This analysis provides an exploration of market dynamics through three potential scenarios—each designed to equip stakeholders with actionable insight for both short-term maneuvering and long-term strategic planning.
+
+## Market Baseline: Current Performance
+
+- Significant transactions recorded in `r first_zone` and `r second_zone` highlight sustained confidence in premium property segments.
+- Premium pricing remains anchored in neighborhoods such as `r top1_neigh`, supported by robust demand for properties with superior lifestyle amenities.
+- Residential demand led by `r most_trans_neigh` indicates persistent appetite for mid-tier developments.
+- High-performing blocks like `r block1` and `r block2` show substantial transaction volumes.
+- Zoning trends suggest an increasing shift toward integrated mixed-use development.
+
+## Scenario 1: Optimistic Growth Trajectory
+
+**Assumptions:**
+- Completion of major infrastructure projects (e.g., metro expansions, arterial highways).
+- Continued foreign investment incentives aligned with Vision 2030.
+- Policy stability encouraging residential and mixed-use development.
+
+**Implications:**
+- Premium neighborhoods (`r top1_neigh`, `r top2_neigh`) experience accelerated appreciation.
+- Substantial inflows of capital into both luxury developments and scalable residential projects.
+- Residential Plots within Residential commercial zones benefit from zoning upgrades.
+
+**Recommended Strategy:**
+- Aggressively pursue premium developments in `r top1_neigh` and `r top2_neigh`.
+- Acquire parcels in key Residential commercial zones before market revaluation.
+- Explore partnerships for mixed-use projects capitalizing on infrastructure proximity.
+
+## Scenario 2: Moderate / Steady Progress
+
+**Assumptions:**
+- Incremental but steady completion of infrastructure and policy initiatives.
+- Sustained but tempered demand for mid-market residential units.
+- Gradual zoning reform consistent with current municipal plans.
+
+**Implications:**
+- Continued steady appreciation in established neighborhoods.
+- Higher absorption rates in mid-tier housing markets like `r most_trans_neigh`.
+- Limited speculative investment, favoring proven development models.
+
+**Recommended Strategy:**
+- Focus on mid-tier residential development pipelines in `r most_trans_neigh`.
+- Maintain moderate exposure to premium segments.
+- Target properties near educational, commercial, and transport hubs.
+
+## Scenario 3: Pessimistic / Slowdown
+
+**Assumptions:**
+- Delays in major infrastructure developments.
+- Macroeconomic headwinds affecting local disposable income.
+- Policy shifts leading to regulatory uncertainty.
+
+**Implications:**
+- Slower growth in premium property segments.
+- Residential market performance reliant on affordability and demand for essential housing.
+- Risk of project delays and higher developer holding costs.
+
+**Recommended Strategy:**
+- Prioritize liquidity: avoid overcommitment to large premium projects.
+- Pivot toward affordable housing in high-volume areas like `r most_trans_neigh`.
+- Actively monitor municipal planning developments to stay ahead of regulatory risks.
+
+## Conclusion: Strategic Positioning Moving Forward
+
+The most prudent approach under current market conditions is a diversified strategy—balancing premium segment exposure in neighborhoods like `r top1_neigh` with solid residential developments in demand-driven zones such as `r most_trans_neigh`. Scenario analysis underscores the need for adaptive planning, continual reassessment of zoning reforms, and aligning with Riyadh’s evolving infrastructure narrative.
+
+Investors and developers are encouraged to maintain flexibility, hedge against downside risks, and capitalize on emerging opportunities where infrastructure and policy converge to shape Riyadh’s long-term real estate success.
+
+
+#  REPORT 6 : Riyadh’s Real Estate Unfolded: The Story Behind the Numbers
+
+## A City in Transition: How Riyadh’s Streets Tell an Investment Tale  
+**Period Covered: `r start_date` - `r end_date`**
+
+In the relentless rhythm of Riyadh’s growth, every property transaction reveals a fragment of a larger, more compelling narrative—a story of ambition, transformation, and wealth-building opportunities. Between `r start_date` and `r end_date`, Riyadh’s property market was not just active—it was dynamic, constantly reshaped by emerging neighborhoods, infrastructure booms, and a population eager for progress.
+
+It’s here that our story begins—with transactions large and small, neighborhoods old and new, and an unfolding map of where the city’s future is quietly being written.
+
+## The Blocks Where Big Money Speaks
+
+Start with the largest strokes of this evolving picture. One deal in `r first_zone`, involving a `r first_prop_type`, wasn’t just a transaction—it was a headline. SAR `r first_value` exchanged hands for a parcel spanning `r first_area` sqm, pricing at SAR `r first_rate` per sqm.
+
+Close behind it, another ambitious movement of capital: a property in `r second_zone`, categorized under `r second_prop_type`, sold for SAR `r second_value`, proving that Riyadh’s appetite for premium real estate is neither hesitant nor rare.
+
+For business leaders and institutional investors, these transactions aren’t just headlines—they’re powerful market signals. They mark emerging leverage points for corporate real estate portfolios, guiding where capital can achieve both security and growth. These zones are where corporate investments intersect with residential prestige, ensuring alignment with both municipal vision and commercial potential.
+
+These locations aren’t random dots on a city map; they are junctions of future infrastructure, proximity to business powerhouses, and essential arteries in the Riyadh urban plan.
+
+## The Neighborhoods That Define Status
+
+The neighborhoods leading this narrative are more than coordinates—they are reputations. `r top1_neigh` sits atop with pricing of SAR `r top1_rate` per sqm, its desirability wrapped in layers of elite schooling, fine dining, and designer retail.
+
+Then comes `r top2_neigh`, not far behind, continuing Riyadh’s story of refined living, cultural capital, and residential pride. `r top3_neigh` completes the premium trilogy, its average rate of SAR `r top3_rate` underlining how exclusivity remains one of Riyadh’s strongest currencies.
+
+## Where Families Are Building Futures
+
+While big numbers steal headlines, it’s the streets of `r most_trans_neigh` that pulse with Riyadh’s real energy. Here, `r most_trans_count` transactions took place—not with luxury aspirations, but with pragmatic dreams. The range of SAR `r most_trans_min_rate` to SAR `r most_trans_max_rate` per sqm illustrates a thriving middle class actively participating in the city’s ongoing transformation.
+
+For developers and investors, this section of the market provides measurable, scalable opportunity. These aren’t speculative bets—they are grounded, data-backed insights into market demand. The consistent activity in `r most_trans_neigh` provides a foundation for reliable absorption rates, sustainable project pipelines, and steady portfolio growth. For businesses seeking predictable returns on investment, developments in this sector are not just promising—they’re essential.
+
+## The Strategic Blocks of Tomorrow
+
+Zoom in closer, and you’ll find `r block1`, a block buzzing with development, moving SAR `r block1_value` worth of properties at an average SAR `r block1_rate` per sqm. Right alongside are `r block2` and `r block3`, collectively proving that the heartbeat of growth isn’t isolated to one glamorous sector—it’s scattered strategically across the grid.
+
+## Zoning: The Invisible Hand Guiding Growth
+
+Behind the scenes of every transaction is the guiding hand of Riyadh’s zoning map. Residential Plots—particularly those tied to Residential commercial—are moving ahead at SAR `r top_zone_rate` per sqm. But it’s not just supply and demand—it’s coordinated strategy. Anticipated changes to Riyadh’s zoning will likely elevate the value of many currently undervalued blocks.
+
+Infrastructure expansions, road networks, and municipal plans are painting the next chapter of this story—and savvy investors know how to read between the lines.
+
+## Where This Story Leads Next
+
+For those watching Riyadh closely, the next chapters are already forming:
+
+- **Luxury Development:** Stay invested in areas like `r top1_neigh` and `r top2_neigh`, where luxury is not just an asset—it’s an expectation.
+- **Volume Play:** Invest where families are flocking—in `r most_trans_neigh`—and secure long-term stability.
+- **Balanced Growth:** Diversify into `r block2` and `r block3` to straddle both security and speculative upside.
+
+## The Riyadh That’s Being Written
+
+Riyadh’s real estate isn’t just data—it’s a narrative of growth, vision, and untapped potential. For businesses, developers, and investors seeking both strategic positioning and future-proof portfolios, the opportunities outlined in this analysis are more than observations—they are actionable pathways.
+
+Now is the moment to align your strategy with Riyadh’s momentum. Capitalize on the synergy of government-backed urban expansion, infrastructure alignment, and high-demand zones.
+
+**Be the catalyst for Riyadh’s next chapter—and let your business grow with the city’s unstoppable evolution.**
+
+
+
+
+#  REPORT 7 : Policy Brief: Strategic Directions for Riyadh’s Real Estate Market
+
+## Executive Summary
+
+This policy brief analyzes the residential and commercial property transaction trends in Riyadh from `r start_date` to `r end_date`, outlining critical considerations for urban planners, policymakers, and investors. The findings emphasize the growing polarization between luxury and mid-tier markets and propose recommendations for fostering balanced, sustainable growth aligned with Vision 2030 objectives.
+
+## Context and Background
+
+Riyadh’s urban expansion has accelerated due to major infrastructure investments and economic diversification efforts. Vision 2030 has catalyzed large-scale projects across transportation, housing, and commercial sectors. However, rapid growth has also created disparities in pricing, accessibility, and zoning challenges that require calibrated policy interventions.
+
+## Key Findings
+
+### 1. Aggregation of High-Value Transactions
+- The largest transaction was recorded in `r first_zone` for a `r first_prop_type`, amounting to SAR `r first_value` at SAR `r first_rate` per sqm.
+- Similar premium activity occurred in `r second_zone` (`r second_prop_type`), valued at SAR `r second_value`.
+- These deals are clustered near planned infrastructure and high-prestige urban corridors.
+
+### 2. Premium Neighborhood Pricing
+- `r top1_neigh` leads pricing at SAR `r top1_rate` per sqm, followed by `r top2_neigh` and `r top3_neigh`.
+- Price premiums reflect superior access to educational, retail, and cultural amenities, reinforcing exclusivity.
+
+### 3. Demand for Affordable Residential Developments
+- `r most_trans_neigh` emerged with `r most_trans_count` transactions, reflecting active participation by middle-income buyers.
+- Price range spans from SAR `r most_trans_min_rate` to SAR `r most_trans_max_rate` per sqm.
+
+### 4. Uneven Zoning Impact
+- Residential commercial areas priced at SAR `r top_zone_rate` per sqm show signs of upward revaluation potential.
+- Industrial zones remain under-leveraged but may present future opportunities pending zoning reform.
+
+## Policy Recommendations
+
+### A. Advance Mixed-Use Development Incentives
+Encourage adaptable zoning policies to foster integration of residential, commercial, and recreational uses, particularly around `r block1` and `r block2`.
+
+### B. Expand Affordable Housing Policies
+Leverage municipal partnerships to direct investment into `r most_trans_neigh`, aligning with population growth and labor market needs.
+
+### C. Improve Clarity on Zoning Reforms
+Establish clear, accessible communication channels for developers regarding pending zoning changes, particularly in undervalued residential commercial sectors.
+
+### D. Align Real Estate with Infrastructure Planning
+Ensure that forthcoming metro lines, arterial roads, and educational hubs are strategically aligned with real estate development strategies to avoid spatial mismatches.
+
+## Implementation Considerations
+- Collaboration between municipal planning departments and private-sector developers is crucial.
+- Investment incentives for affordable housing should be aligned with sustainable urban growth principles.
+- Monitoring and evaluation frameworks should be established to measure the effectiveness of zoning reforms and market responsiveness.
+
+## Conclusion
+
+Riyadh’s property market presents significant opportunities for strategic development, but careful alignment with urban planning policies is required to ensure inclusive growth. By fostering transparency, adaptable zoning, and infrastructural synergy, Riyadh can build a real estate market that supports its broader socioeconomic objectives.
+
+**Strategic coordination today will secure Riyadh’s prosperity tomorrow.**
+
+
+
+
+#  REPORT 8 : Riyadh Real Estate in Contrast: Luxury vs. Volume | Premium vs. Potential
+
+## Introduction
+
+As Riyadh evolves rapidly in alignment with Vision 2030, its property market tells two parallel stories: **luxury-driven growth zones** competing with **affordability-driven community hubs**. This analysis uses a direct contrast framework to reveal where investors can balance risk, return, and opportunity in both established and emerging areas.
+
+## Section 1: High-End Deals vs. Residential Demand
+
+| Segment                 | High-End Transactions                                      | Volume Residential Demand                       |
+|-------------------------|-----------------------------------------------------------|------------------------------------------------|
+| **Key Location**        | `r first_zone` (`r first_prop_type`)                      | `r most_trans_neigh`                            |
+| **Top Deal Value**      | SAR `r first_value` at `r first_rate` SAR/sqm             | `r most_trans_count` transactions total        |
+| **Buyer Profile**       | Institutional, wealth-focused                             | Middle-class, owner-occupiers                  |
+| **Growth Potential**    | Prestige-driven, subject to luxury demand                 | Predictable growth based on population trends  |
+| **Recommendation**      | Target premium developments near infrastructure corridors | Prioritize scalable mid-tier housing projects  |
+
+## Section 2: Premium Neighborhoods vs. Emerging Value Zones
+
+| Feature                  | Premium Neighborhoods            | Residential Commercial Zones           |
+|--------------------------|-----------------------------------|----------------------------------------|
+| **Examples**             | `r top1_neigh`, `r top2_neigh`   | `r top_zone`                           |
+| **Avg. Rate (SAR/sqm)**  | `r top1_rate` - `r top2_rate`    | `r top_zone_rate`                      |
+| **Amenities**            | Elite schools, branded retail    | Commercial adjacency, infrastructure   |
+| **Market Status**        | Established premium segment      | Undervalued, speculative upside        |
+| **Action**               | Maintain luxury development focus | Acquire undervalued plots early        |
+
+## Section 3: Stable Blocks vs. Untapped Blocks
+
+| Attribute               | Stable Performer (e.g., `r block1`) | Untapped Opportunities (e.g., `r block3`) |
+|-------------------------|--------------------------------------|-------------------------------------------|
+| **Transaction Volume**  | SAR `r block1_value`                 | SAR `r block3_rate` per sqm               |
+| **Risk Profile**        | Reliable, proven demand              | Speculative, requires planning certainty  |
+| **Investment Strategy** | Defensive growth                     | Opportunistic, medium-to-long-term hold   |
+
+## Conclusion: Balance is the Strategy
+
+Investors, developers, and policymakers should adopt a **portfolio mindset**. Pair high-end developments in `r top1_neigh` with volume-driven projects in `r most_trans_neigh`. Simultaneously, keep an eye on undervalued Residential Commercial plots for future repositioning.
+
+**Contrast reveals clarity. Diversify exposure across Riyadh’s two speeds of growth to build sustainable, balanced success.**
+
+
+
+
+#  REPORT 9 : Numerical Insights: By the Numbers | Riyadh Real Estate Analysis
+
+## Overview by Numbers
+
+| Metric                          | Value                                        |
+|---------------------------------|----------------------------------------------|
+| **Analysis Period**             | `r start_date` - `r end_date`                |
+| **Total Transactions (Count)**  | `r nrow(df)`                                 |
+| **Highest Transaction (Value)** | SAR `r first_value`                         |
+| **Highest Rate (SAR/sqm)**      | SAR `r first_rate`                          |
+| **Largest Transaction Area**    | `r first_area` sqm                          |
+| **Top Neighborhood (Rate)**     | `r top1_neigh` @ SAR `r top1_rate` per sqm  |
+| **Top Residential Count**       | `r most_trans_neigh` - `r most_trans_count` transactions |
+
+## Transaction Value Distribution
+
+| Segment                  | Value (SAR)                                |
+|--------------------------|--------------------------------------------|
+| **Premium Transaction #1** | SAR `r first_value`                       |
+| **Premium Transaction #2** | SAR `r second_value`                      |
+| **Block with Highest Value** | `r block1` - SAR `r block1_value`         |
+
+## Rate Per Square Meter
+
+| Area                     | Avg. Rate (SAR/sqm)                       |
+|--------------------------|-------------------------------------------|
+| **Top Neighborhood**     | `r top1_neigh` - SAR `r top1_rate`        |
+| **Second Premium Area**  | `r top2_neigh` - SAR `r top2_rate`        |
+| **Third Premium Area**   | `r top3_neigh` - SAR `r top3_rate`        |
+| **Top Residential Plot Zone** | `r top_zone` - SAR `r top_zone_rate`  |
+
+## Transaction Volume by Location
+
+| Neighborhood            | Transactions (Count)                      |
+|-------------------------|-------------------------------------------|
+| `r most_trans_neigh`    | `r most_trans_count`                      |
+| `r second_trans_neigh`  | Moderate Volume                           |
+
+## Range of Residential Rates (SAR/sqm)
+
+| Metric            | Value                                     |
+|-------------------|-------------------------------------------|
+| **Minimum Rate**  | SAR `r most_trans_min_rate`               |
+| **Maximum Rate**  | SAR `r most_trans_max_rate`               |
+
+## Conclusion: Key Numerical Takeaways
+
+1. **SAR `r first_value`** represents the most significant transaction, confirming sustained appetite for luxury real estate.
+2. `r most_trans_neigh` stands out with **`r most_trans_count`** transactions, anchoring mid-tier demand.
+3. The pricing spectrum—from SAR `r most_trans_min_rate` to SAR `r most_trans_max_rate`—illustrates Riyadh’s balanced blend of affordability and prestige.
+4. Watch for upward movement in undervalued zones like `r top_zone`, which currently stand at SAR `r top_zone_rate` per sqm.
+
+**For numbers-driven investors, these figures define where focus should remain moving forward.**
+
+
+
+
+#  REPORT 10 : 🏢 Riyadh Property Market Update | Special Edition Newsletter
+
+## Your Monthly Snapshot | `r start_date` - `r end_date`
+
+Welcome to the latest edition of our Riyadh Property Market Newsletter. Here's your **concise** and **data-backed** briefing of real estate performance, revealing trends, top areas, and actionable market intelligence.
+
+## 🌟 Market Highlights
+
+- 📅 **Analysis Period:** `r start_date` to `r end_date`
+- 📊 **Total Transactions:** `r nrow(df)`
+- 💰 **Biggest Deal:** SAR `r first_value` | Location: `r first_zone` | Area: `r first_area` sqm | Rate: SAR `r first_rate` per sqm
+- 📈 **Top Neighborhood by Rate:** `r top1_neigh` @ SAR `r top1_rate` per sqm
+- 🏘️ **Most Active Neighborhood (Residential):** `r most_trans_neigh` | `r most_trans_count` transactions
+
+## 🏆 Premium Transactions Spotlight
+
+1️⃣ **SAR `r first_value`** in `r first_zone` (`r first_prop_type`)
+
+2️⃣ **SAR `r second_value`** in `r second_zone` (`r second_prop_type`)
+
+## 📌 By the Numbers: Residential Market
+
+- **Pricing Spectrum:** SAR `r most_trans_min_rate` → SAR `r most_trans_max_rate` per sqm
+- **Top 3 Premium Areas by Rate:**
+  - `r top1_neigh`: SAR `r top1_rate` per sqm
+  - `r top2_neigh`: SAR `r top2_rate` per sqm
+  - `r top3_neigh`: SAR `r top3_rate` per sqm
+
+## 🗺️ Blocks to Watch
+
+- **Top Performing Block:** `r block1` → SAR `r block1_value` total
+- **Emerging Value:** `r block3` → SAR `r block3_rate` per sqm
+
+## 🔎 Zoning Snapshot
+
+- **Top Residential Plot Zone:** `r top_zone` → SAR `r top_zone_rate` per sqm
+- **Future Watch:** Residential commercial areas poised for growth
+
+## 📬 Editor’s Take
+
+Riyadh’s market is balancing premium transactions with strong residential activity. **`r most_trans_neigh`** leads the way for developers aiming at mid-market housing, while undervalued commercial zones offer speculative upside for early movers.
+
+Stay ahead with data. 📧 For tailored investment insights, contact our advisory desk.
+
+**See you next edition!**
+
+
+
