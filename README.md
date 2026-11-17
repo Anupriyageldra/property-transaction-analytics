@@ -1,4 +1,4 @@
-Property Transaction Analytics & Market Insights
+# Property Transaction Analytics & Market Insights
 
 An R-based data analytics project that transforms real estate transaction data into meaningful market insights through statistical analysis, data visualization, neighbourhood-level analysis, and automated narrative reporting.
 
@@ -6,7 +6,7 @@ The project generates a comprehensive HTML report containing **10 different anal
 
 ---
 
- Project Overview
+## Project Overview
 
 Real estate transaction datasets contain valuable information about property prices, transaction values, property sizes, geographical locations, and market activity. However, extracting meaningful insights from raw transaction records requires systematic data processing, statistical analysis, and effective visualization.
 
@@ -14,14 +14,14 @@ This project uses **R programming** to automate the analysis of property transac
 
 The analysis focuses on identifying transaction patterns, understanding property price trends, comparing neighbourhood performance, examining transaction distributions, and highlighting data quality issues.
 
- Key Features
+## Key Features
 
-- Automated Data Processing: Imports and prepares Excel-based property transaction datasets for analysis.
-- Transaction Trend Analysis: Examines transaction activity and changes over time.
-- Property Price Analysis:Evaluates transaction values, property areas, and price per square metre.
-- Neighbourhood Analysis: Compares transaction activity and property market performance across neighbourhoods.
-- Geographical Insights: Analyses transaction distribution across available zones and neighbourhoods.
-- Statistical Analysis:Calculates descriptive statistics, including mean, median, minimum, maximum, and distribution measures.
+- **Automated Data Processing:** Imports and prepares Excel-based property transaction datasets for analysis.
+- **Transaction Trend Analysis:** Examines transaction activity and changes over time.
+- **Property Price Analysis:** Evaluates transaction values, property areas, and price per square metre.
+- **Neighbourhood Analysis:** Compares transaction activity and property market performance across neighbourhoods.
+- **Geographical Insights:** Analyses transaction distribution across available zones and neighbourhoods.
+- **Statistical Analysis:** Calculates descriptive statistics, including mean, median, minimum, maximum, and distribution measures.
 - **Data Quality Assessment:** Identifies missing values, inconsistencies, and potential outliers.
 - **Data Visualization:** Generates charts and graphical summaries to communicate analytical findings.
 - **Automated Report Generation:** Produces one consolidated HTML report containing 10 different analytical writing styles.
@@ -109,20 +109,21 @@ The expected dataset includes fields such as:
 | PROPERTY.TYPE.AS.PER.GOVERNMENT.RECORD | Property type according to government records |
 | OUTLIER | Outlier indicator, where available |
 
-The dataset is not included in this repository. Users must provide their own dataset with compatible column names and data structure. Some analyses may require optional columns.
+**Note:** The dataset is not included in this repository. Users must provide their own dataset with compatible column names and data structure. Some analyses may require optional columns.
 
 ## Installation & Setup
 
- 1. Clone the Repository
+### 1. Clone the Repository
 
 ```bash
-git clone https://github.com//property-transaction-analytics.git
+git clone https://github.com/Anupriyageldera/property-transaction-analytics.git
 ```
-2. Open the Project
+
+### 2. Open the Project
 
 Open the downloaded repository folder in RStudio.
 
-3. Install Required Packages
+### 3. Install Required Packages
 
 Run the following command in the R console:
 
@@ -143,13 +144,19 @@ packages <- c(
 install.packages(packages)
 ```
 
- 4. Add Your Dataset
+### 4. Add Your Dataset
 
 Place your Excel dataset inside the `data/` directory.
 
+The expected filename is:
+
+```text
+property_transactions_1750066258149.xlsx
+```
+
 If the dataset is stored elsewhere or has a different filename, the script can prompt you to select it.
 
-5. Execute the Analysis
+### 5. Execute the Analysis
 
 Run the main R script:
 
@@ -175,7 +182,7 @@ output/report_assets/
 
 The HTML report brings together the ten analytical narratives in one place, making it easier to review the findings from business, statistical, geographical, and research perspectives.
 
- Analytical Objectives
+## Analytical Objectives
 
 The primary objectives of this project are:
 
@@ -187,7 +194,7 @@ The primary objectives of this project are:
 6. Communicate analytical findings through meaningful visualizations.
 7. Automate the creation of multiple report formats using R.
 
-Applications
+## Applications
 
 This project demonstrates how data analytics can support:
 
@@ -198,7 +205,7 @@ This project demonstrates how data analytics can support:
 - Urban development and planning studies.
 - Business intelligence and analytical reporting.
 
-Future Enhancements
+## Future Enhancements
 
 Potential improvements include:
 
@@ -209,19 +216,14 @@ Potential improvements include:
 - Integration with regularly updated property transaction datasets.
 - Exporting analytical reports to PDF and Excel formats.
 
- Limitations
+## Limitations
 
 - The quality of the analysis depends on the completeness and accuracy of the input dataset.
 - Findings represent patterns in the supplied transaction records and should not automatically be interpreted as predictions of future property prices.
 - Geographical conclusions are limited to the location fields available in the dataset.
 - The generated report requires a compatible input Excel file.
 
-Author
+## Author
 
-Anupriya Geldra
+**Anupriya Geldra**
 
-
-
-
-
-*This project was developed to demonstrate practical skills in R programming, data cleaning, exploratory data analysis, statistical interpretation, data visualization, and automated analytical reporting.*
